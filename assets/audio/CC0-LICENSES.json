@@ -1,0 +1,30 @@
+{
+  "license": "CC0 1.0 Universal",
+  "processing": "AAC compression, mono, loudness normalization; original loop editions where provided",
+  "tracks": [
+    {
+      "title": "Forget Me Not",
+      "source": "https://opengameart.org/content/forget-me-not"
+    },
+    {
+      "title": "JRPG Piano",
+      "source": "https://opengameart.org/content/jrpg-piano"
+    },
+    {
+      "title": "Piano Solo",
+      "source": "https://opengameart.org/content/piano-emotional-solo-139"
+    },
+    {
+      "title": "Regret",
+      "source": "https://opengameart.org/content/regret-short-emotional-piano"
+    },
+    {
+      "title": "Vaporware",
+      "source": "https://opengameart.org/content/calm-piano-1-vaporware"
+    },
+    {
+      "title": "At the End of Hope",
+      "source": "https://opengameart.org/content/at-the-end-of-hope"
+    }
+  ]
+}

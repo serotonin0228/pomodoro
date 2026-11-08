@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Pomodoro",
+    "slug": "pomodoro",
+    "version": "1.0.5",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pomodoro.focus"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.pomodoro.focus",
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
+      "versionCode": 6
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "enableBackgroundPlayback": true,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-notifications",
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "buildArchs": [
+              "arm64-v8a"
+            ],
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enablePngCrunchInReleaseBuilds": true,
+            "useLegacyPackaging": true,
+            "gifEnabled": false,
+            "webpEnabled": false
+          }
+        }
+      ],
+      "./plugins/withReleaseSigning.cjs",
+      "./plugins/withFocusNative.cjs",
+      "./plugins/withPlainLaunch.cjs"
+    ],
+    "scheme": "pomodoro"
+  }
+}
