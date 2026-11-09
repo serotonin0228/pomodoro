@@ -16,6 +16,14 @@ class FocusModule(private val ctx: ReactApplicationContext) : ReactContextBaseJa
       promise.resolve(null)
     } catch(e: Exception) { promise.reject("FOCUS_NOTIFICATION", e) }
   }
+  @ReactMethod fun setLaunchTheme(theme: String) {
+    if (theme !in listOf("light", "dark", "system")) return
+    ctx.getSharedPreferences("pomodoro-appearance", 0).edit().putString("theme", theme).apply()
+    if (android.os.Build.VERSION.SDK_INT >= 31) {
+      val id = when (theme) { "light" -> R.style.Theme_Pomodoro_LaunchLight; "dark" -> R.style.Theme_Pomodoro_LaunchDark; else -> 0 }
+      ctx.currentActivity?.let { activity -> activity.runOnUiThread { activity.splashScreen.setSplashScreenTheme(id) } }
+    }
+  }
   @ReactMethod fun openLiveSettings() {
     val live = Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS").putExtra("android.provider.extra.APP_PACKAGE", ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try { ctx.startActivity(live) } catch(e: Exception) { ctx.startActivity(Intent("android.settings.APP_NOTIFICATION_SETTINGS").putExtra("android.provider.extra.APP_PACKAGE", ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

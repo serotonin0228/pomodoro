@@ -32,7 +32,7 @@ function Workspace() {
   const systemTheme = useColorScheme();
   const isDark = settings.theme === 'dark' || (settings.theme === 'system' && systemTheme === 'dark');
   const c = isDark ? dark : light;
-  useEffect(() => { void setBackgroundColorAsync(c.bg).catch(() => {}); }, [c.bg]);
+  useEffect(() => { if (!ready) return; void setBackgroundColorAsync(c.bg).catch(() => {}); if (Platform.OS === 'android') NativeModules.FocusStatus?.setLaunchTheme(settings.theme); }, [c.bg, ready, settings.theme]);
   const { width, height } = useWindowDimensions();
   const wide = width >= 850;
   const insets = useSafeAreaInsets();
@@ -268,6 +268,7 @@ function Workspace() {
     if (sheet === 'history') { const filtered = liveRecords.filter(r => (historyMode === '全部' || (historyMode === '倒计时' ? r.mode === 'countdown' : r.mode === 'stopwatch')) && (!historyQuery.trim() || `${new Date(r.start).toLocaleDateString(locale)} ${new Date(r.start).toISOString().slice(0, 10)} ${formatDuration(r.seconds)}`.includes(historyQuery.trim()))); return <><TextInput accessibilityLabel="搜索日期或时长" placeholder="搜索日期或时长" placeholderTextColor={c.secondary} value={historyQuery} onChangeText={setHistoryQuery} style={[ui.input, { backgroundColor: c.surface, color: c.text, marginBottom: 12 }]}/><Segments options={['全部', '倒计时', '正计时']} value={historyMode} onChange={setHistoryMode}/>{filtered.length ? [...filtered].reverse().map(r => <RecordRow key={r.id} record={r} onPress={() => showRecord(r)}/>) : <Text style={{ color: c.secondary, textAlign: 'center', padding: 30 }}>没有符合条件的记录</Text>}<Button label="导出 CSV" secondary onPress={doExport}/></>; }
     return null;
   }
+  if (!ready) return null;
   return <LanguageContext.Provider value={language}><Theme.Provider value={{ c, isDark, reduceMotion }}><View style={{ flex: 1, backgroundColor: c.bg }}>
     <StatusBar style={isDark ? 'light' : 'dark'}/>
     <BlurTargetView ref={blurTarget} style={{ flex: 1, backgroundColor: c.bg }}><View collapsable={false} pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.bg }]}/><ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: wide ? 36 : 24, paddingTop: Math.max(insets.top, wide ? 22 : 14) + 60, paddingBottom: wide ? 28 : Math.max(insets.bottom, 12) + 70 }} showsVerticalScrollIndicator={false}>
