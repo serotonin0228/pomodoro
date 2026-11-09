@@ -12,6 +12,7 @@ export function useWorkspace() {
   const [device, setDevice] = useState('');
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState('仅保存在本机');
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [conflict, setConflict] = useState<CloudRow | null>(null);
   const [storageError, setStorageError] = useState('');
   const current = useRef(state), revision = useRef(0), dirty = useRef(false), busy = useRef(false), account = useRef<string | null>(null), storageKey = useRef('pomodoro.guest.v1'), seq = useRef(0), loading = useRef(true), conflictRef = useRef<CloudRow | null>(null);
@@ -23,7 +24,9 @@ export function useWorkspace() {
   const markConflict = useCallback((row: CloudRow) => { conflictRef.current = row; setConflict(row); setStatus('有待处理的同步冲突'); }, []);
   const pull = useCallback(async (s: Session) => {
     const row = await fetchCloud(s);
-    if (account.current !== s.user.id || !row) return;
+    if (account.current !== s.user.id) return;
+    setLastSyncedAt(Date.now());
+    if (!row) return;
     if (row.revision <= revision.current) return;
     if (dirty.current) { markConflict(row); return; }
     revision.current = row.revision;
@@ -39,6 +42,7 @@ export function useWorkspace() {
       const row = await saveCloud(current.current, revision.current, device);
       if (account.current !== user) return;
       revision.current = row.revision;
+      setLastSyncedAt(Date.now());
       if (sent === seq.current) { dirty.current = false; void persist(current.current, false); setStatus('已同步'); }
       else setStatus('等待同步');
     } catch (e) {
@@ -64,7 +68,7 @@ export function useWorkspace() {
       const id = (await AsyncStorage.getItem('pomodoro.device')) || `${Platform.OS}-${uid()}`;
       await AsyncStorage.setItem('pomodoro.device', id);
       if (!live) return;
-      setDevice(id); account.current = s?.user.id || null; setSession(s);
+      setDevice(id); account.current = s?.user.id || null; setSession(s); setLastSyncedAt(null);
       storageKey.current = `pomodoro.${s?.user.id || 'guest'}.v1`;
       const raw = await AsyncStorage.getItem(storageKey.current);
       let local = initialState(id);
@@ -117,5 +121,5 @@ export function useWorkspace() {
     setStatus('等待同步');
   }, [accept]);
   const takeover = useCallback(() => update(s => ({ ...s, timer: { ...s.timer, device } })), [device, update]);
-  return { state, ready, device, session, status, conflict, storageError, update, resolve, takeover, retry: async () => { if (session) { await pull(session); await push(); } } };
+  return { state, ready, device, session, status, lastSyncedAt, conflict, storageError, update, resolve, takeover, retry: async () => { if (session) { await pull(session); await push(); } } };
 }

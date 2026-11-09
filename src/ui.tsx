@@ -20,7 +20,7 @@ export function Button({ label, onPress, secondary = false, danger = false, icon
   const { c, reduceMotion } = useTheme();
   const [scale] = useState(() => new Animated.Value(1));
   const press = (value: number) => { if (!reduceMotion) Animated.spring(scale, { toValue: value, damping: 20, stiffness: 450, useNativeDriver: true }).start(); };
-  return <Animated.View style={{ transform: [{ scale }] }}><Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} onPressIn={() => press(.97)} onPressOut={() => press(1)} style={({ pressed }) => [ui.button, { backgroundColor: secondary || danger ? '#FFFFFF' : c.blue, opacity: disabled ? .4 : pressed ? .78 : 1 }]}>{icon && <Icon name={icon} size={20} color={danger ? '#FF3B30' : secondary ? c.blue : '#fff'}/>}<Text style={{ color: danger ? '#FF3B30' : secondary ? c.blue : '#fff', fontSize: 17, fontWeight: '600' }}>{label}</Text></Pressable></Animated.View>;
+  return <Animated.View style={{ transform: [{ scale }] }}><Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} onPressIn={() => press(.97)} onPressOut={() => press(1)} style={({ pressed }) => [ui.button, { backgroundColor: secondary || danger ? c.surface : c.blue, opacity: disabled ? .4 : pressed ? .78 : 1 }]}>{icon && <Icon name={icon} size={20} color={danger ? '#FF3B30' : secondary ? c.blue : '#fff'}/>}<Text style={{ color: danger ? '#FF3B30' : secondary ? c.blue : '#fff', fontSize: 17, fontWeight: '600' }}>{label}</Text></Pressable></Animated.View>;
 }
 export function IconButton({ name, label, onPress, disabled = false }: { name: IconName; label: string; onPress: () => void; disabled?: boolean }) {
   const { c } = useTheme();

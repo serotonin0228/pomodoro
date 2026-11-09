@@ -10,10 +10,10 @@ export type Segment = { start: number; end: number };
 export type Settings = {
   focusMinutes: number; breakMinutes: number; longBreakMinutes: number; rounds: number;
   dailyGoal: number; theme: 'system' | 'light' | 'dark'; notifications: boolean;
-  autoBreak: boolean; autoFocus: boolean; sound: boolean; musicDuringBreak: boolean; musicEnabled: boolean; musicTrack: number;
+  autoBreak: boolean; autoFocus: boolean; sound: boolean; musicDuringBreak: boolean; musicEnabled: boolean; musicTrack: number; musicMode: 'single' | 'sequence' | 'shuffle';
 };
 export type State = { timer: Timer; records: FocusRecord[]; settings: Settings; segments: Segment[]; round: number; updatedAt: number };
-export const defaults: Settings = { focusMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, rounds: 4, dailyGoal: 120, theme: 'system', notifications: true, autoBreak: false, autoFocus: false, sound: true, musicDuringBreak: false, musicEnabled: true, musicTrack: 0 };
+export const defaults: Settings = { focusMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, rounds: 4, dailyGoal: 120, theme: 'system', notifications: true, autoBreak: false, autoFocus: false, sound: true, musicDuringBreak: false, musicEnabled: true, musicTrack: 0, musicMode: 'single' };
 export function uid() { return `${timeNow().toString(36)}-${Math.random().toString(36).slice(2, 12)}`; }
 export function newTimer(device: string, settings = defaults, mode: Mode = 'countdown', phase: Phase = 'focus', round = 0): Timer {
   return { id: uid(), mode, phase, status: 'idle', duration: (phase === 'focus' ? settings.focusMinutes : round > 0 && round % settings.rounds === 0 ? settings.longBreakMinutes : settings.breakMinutes) * 60, elapsed: 0, startedAt: null, createdAt: timeNow(), device };
