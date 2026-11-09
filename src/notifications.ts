@@ -14,13 +14,24 @@ export async function requestNotifications(language: Language = 'zh') {
   if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('timer', { name: translate('计时提醒', language), importance: AndroidImportance.HIGH, sound: 'default' });
   return (await Notifications.requestPermissionsAsync()).granted;
 }
-export async function cancelReminder() { if (Platform.OS !== 'web') await Notifications.cancelAllScheduledNotificationsAsync(); }
-export async function scheduleReminder(timer: Timer, sound: boolean, language: Language = 'zh') {
-  if (Platform.OS === 'web') return;
-  await cancelReminder();
-  if (Platform.OS === 'android') return; // Native foreground service owns Android deadlines and pause actions.
-  if (timer.status !== 'running' || timer.mode !== 'countdown') return;
-  await Notifications.scheduleNotificationAsync({ content: { title: translate(timer.phase === 'focus' ? '专注完成，休息一下吧' : '休息结束，准备好了吗？', language), body: translate('打开Pomodoro，继续你的节奏。', language), sound: sound ? 'default' : false }, trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.max(1, Math.ceil(remaining(timer))), channelId: 'timer' } });
+const reminderId = 'pomodoro-focus-reminder';
+let queue: Promise<void> = Promise.resolve();
+function enqueue(operation: () => Promise<void>) {
+  const next = queue.catch(() => {}).then(operation);
+  queue = next;
+  return next;
+}
+export function cancelReminder() {
+  if (Platform.OS === 'web') return Promise.resolve();
+  return enqueue(() => Notifications.cancelScheduledNotificationAsync(reminderId));
+}
+export function scheduleReminder(timer: Timer, sound: boolean, language: Language = 'zh') {
+  if (Platform.OS === 'web') return Promise.resolve();
+  return enqueue(async () => {
+    await Notifications.cancelScheduledNotificationAsync(reminderId);
+    if (Platform.OS === 'android' || timer.status !== 'running' || timer.mode !== 'countdown') return;
+    await Notifications.scheduleNotificationAsync({ identifier: reminderId, content: { title: translate(timer.phase === 'focus' ? '专注完成，休息一下吧' : '休息结束，准备好了吗？', language), body: translate('打开Pomodoro，继续你的节奏。', language), sound: sound ? 'default' : false }, trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.max(1, Math.ceil(remaining(timer))), channelId: 'timer' } });
+  });
 }
 export function notifyWeb(phase: string, language: Language = 'zh') {
   if (Platform.OS === 'web' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {

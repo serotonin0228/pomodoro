@@ -97,7 +97,7 @@ function Workspace() {
     setAuthBusy(false); setAuthError(''); setNeedsConfirmation(false);
   }, [sheet]);
   useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion); const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion); return () => sub.remove(); }, []);
-  useEffect(() => { const t = setInterval(() => setNow(timeNow()), 250); const sub = AppState.addEventListener('change', v => { if (v === 'active') { setNow(timeNow()); void notificationPermission().then(setPermission); } }); return () => { clearInterval(t); sub.remove(); }; }, []);
+  useEffect(() => { const t = setInterval(() => { if (AppState.currentState === 'active') setNow(timeNow()); }, timer.status === 'running' ? 1000 : 60000); const sub = AppState.addEventListener('change', v => { if (v === 'active') { setNow(timeNow()); void notificationPermission().then(setPermission); } }); return () => { clearInterval(t); sub.remove(); }; }, [timer.status]);
   useEffect(() => { void notificationPermission().then(setPermission).catch(() => setPermission('unsupported')); }, []);
   useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'mixWithOthers' }).catch(() => setMusicError('无法启用后台音频，仍可在前台播放。')); }, []);
   useEffect(() => { player.loop = settings.musicMode === 'single'; }, [player, settings.musicMode]);

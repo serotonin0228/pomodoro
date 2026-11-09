@@ -1,3 +1,4 @@
+import { rangeGoal } from '../src/goal';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { clock, dailyTotals, elapsed, finishState, initialState, mergeRecords, newTimer, pauseState } from '../src/model';
@@ -48,4 +49,15 @@ test('merging divergent copies of one session preserves unique intervals without
   const merged = mergeRecords([a], [b])[0];
   assert.equal(merged.seconds, 20);
   assert.deepEqual(merged.segments, [{ start: 1000, end: 16000 }, { start: 21000, end: 26000 }]);
+});
+
+
+test('goal progress follows the selected dates, excludes future targets and deleted sessions', () => {
+  const state = initialState('device');
+  const d1 = new Date(2025, 0, 6), d2 = new Date(2025, 0, 7), d3 = new Date(2025, 0, 8);
+  const totals = { '2025-01-06': 3600, '2025-01-07': 1800, '2025-01-08': 7200 };
+  assert.equal(rangeGoal({ ...state.settings, dailyGoal: 60 }, [d1, d2, d3], totals, [], +d2), 75);
+  assert.equal(rangeGoal({ ...state.settings, goalType: 'none' }, [d1], totals, [], +d2), null);
+  const record = { id: '1', mode: 'countdown' as const, start: +d1, end: +d1 + 1000, seconds: 1, segments: [{ start: +d1, end: +d1 + 1000 }] };
+  assert.equal(rangeGoal({ ...state.settings, goalType: 'dailySessions', dailySessions: 1 }, [d1], totals, [record, { ...record, id: '2', deleted: true }], +d2), 100);
 });

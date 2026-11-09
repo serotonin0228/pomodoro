@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { FocusRecord, Settings, dailyTotals, dayKey, formatDuration } from './model';
 import { Icon } from './Icon';
+import { rangeGoal } from './goal';
 import { IconButton, Segments, iosCorners, ui, useTheme } from './ui';
 
 export function RecordRow({ record: r, onPress }: { record: FocusRecord; onPress: () => void }) {
@@ -18,6 +19,7 @@ export function Stats({ records, settings, wide, now, onStart, onExport, onHisto
   const [offset, setOffset] = useState(0);
   const [fromDate, setFromDate] = useState(dayKey(new Date(now - 6 * 86400000)));
   const [toDate, setToDate] = useState(dayKey(now));
+  const [dateError, setDateError] = useState(false);
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const dailyGoal = settings.dailyGoal;
@@ -46,15 +48,12 @@ export function Stats({ records, settings, wide, now, onStart, onExport, onHisto
   const streakKeys = Object.keys(totals).filter(key => totals[key] >= settings.streakMinutes * 60).sort();
   let longestStreak = 0, run = 0, previous = '';
   for (const key of streakKeys) { const yesterday = new Date(`${key}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1); run = dayKey(yesterday) === previous ? run + 1 : 1; longestStreak = Math.max(longestStreak, run); previous = key; }
-  const weekStart = new Date(`${todayKey}T00:00:00`); weekStart.setDate(weekStart.getDate() - (weekStart.getDay() + 6) % 7);
-  const weekSeconds = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i)).reduce((n, d) => n + (totals[dayKey(d)] || 0), 0);
   const goalType = settings.goalType;
   const goalLabel = goalType === 'weeklyMinutes' ? '每周时长目标' : goalType === 'dailySessions' ? '每日次数目标' : goalType === 'none' ? '目标已关闭' : '每日目标';
   const goalTarget = goalType === 'weeklyMinutes' ? settings.weeklyMinutes * 60 : goalType === 'dailySessions' ? settings.dailySessions : settings.dailyGoal * 60;
-  const goalActual = goalType === 'weeklyMinutes' ? weekSeconds : goalType === 'dailySessions' ? live.filter(r => dayKey(r.start) === todayKey).length : totals[todayKey] || 0;
   const rangeRecords = live.filter(r => r.segments.some(x => x.end > +range.start && x.start < +range.end));
   const history = selectedDay ? live.filter(r => r.segments.some(x => dayKey(x.start) <= selectedDay && dayKey(x.end - 1) >= selectedDay)) : rangeRecords;
-  const goal = goalType === 'none' ? 0 : Math.round(goalActual / goalTarget * 100);
+  const goal = rangeGoal(settings, range.days, totals, live, now) ?? 0;
   const max = Math.max(3600, ...range.days.map(d => totals[dayKey(d)] || 0));
   const intervals = rangeRecords.flatMap(r => r.segments).map(x => ({ start: Math.max(x.start, +range.start), end: Math.min(x.end, +range.end) })).filter(x => x.end > x.start).sort((a, b) => a.start - b.start);
   const merged: { start: number; end: number }[] = [];
@@ -66,7 +65,7 @@ export function Stats({ records, settings, wide, now, onStart, onExport, onHisto
   return <View style={{ paddingBottom: 24 }}>
     <Pressable accessibilityRole="button" accessibilityLabel="设置统计目标" onPress={onGoal} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, marginBottom: 18, ...iosCorners(24), backgroundColor: c.surface, opacity: pressed ? .7 : 1 })}><Icon name="target" size={21} color={c.blue}/><Text style={{ flex: 1, fontSize: 15, color: c.text }}>{goalLabel}</Text><Text style={{ color: c.blue, fontSize: 15 }}>{goalType === 'none' ? '—' : goalType === 'dailySessions' ? `${settings.dailySessions} ${language === 'en' ? 'sessions' : '次'}` : formatDuration(goalTarget)}</Text><Icon name="chevron" size={13} color={c.secondary}/></Pressable>
     <View style={{ maxWidth: 340, width: '100%', alignSelf: 'center', marginBottom: 21 }}><Segments options={['日', '周', '月', '自定义']} value={period} onChange={v => { setPeriod(v); setOffset(0); setSelectedDay(null); }}/></View>
-    {period === '自定义' && <View style={{ gap: 10, marginBottom: 18 }}><TextInput accessibilityLabel="开始日期" placeholder="YYYY-MM-DD" placeholderTextColor={c.secondary} value={fromDate} onChangeText={setFromDate} style={[ui.input, { backgroundColor: c.surface, color: c.text }]}/><TextInput accessibilityLabel="结束日期" placeholder="YYYY-MM-DD" placeholderTextColor={c.secondary} value={toDate} onChangeText={setToDate} style={[ui.input, { backgroundColor: c.surface, color: c.text }]}/><Pressable accessibilityRole="button" onPress={() => { const valid = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T12:00:00`)) && dayKey(new Date(`${v}T12:00:00`)) === v; if (valid(fromDate) && valid(toDate) && fromDate <= toDate && Date.parse(`${toDate}T12:00:00`) - Date.parse(`${fromDate}T12:00:00`) <= 89 * 86400000) setCustomRange({ start: fromDate, end: toDate }); }} style={{ padding: 12, alignItems: 'center' }}><Text style={{ color: c.blue }}>{language === 'en' ? 'Apply date range (up to 90 days)' : '应用日期范围（最多 90 天）'}</Text></Pressable></View>}
+    {period === '自定义' && <View style={{ gap: 10, marginBottom: 18 }}><TextInput accessibilityLabel="开始日期" placeholder="YYYY-MM-DD" placeholderTextColor={c.secondary} value={fromDate} onChangeText={setFromDate} style={[ui.input, { backgroundColor: c.surface, color: c.text }]}/><TextInput accessibilityLabel="结束日期" placeholder="YYYY-MM-DD" placeholderTextColor={c.secondary} value={toDate} onChangeText={setToDate} style={[ui.input, { backgroundColor: c.surface, color: c.text }]}/><Pressable accessibilityRole="button" onPress={() => { const valid = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T12:00:00`)) && dayKey(new Date(`${v}T12:00:00`)) === v; if (valid(fromDate) && valid(toDate) && fromDate <= toDate && Date.parse(`${toDate}T12:00:00`) - Date.parse(`${fromDate}T12:00:00`) <= 89 * 86400000) { setCustomRange({ start: fromDate, end: toDate }); setSelectedDay(null); setDateError(false); } else setDateError(true); }} style={{ padding: 12, alignItems: 'center' }}><Text style={{ color: c.blue }}>{language === 'en' ? 'Apply date range (up to 90 days)' : '应用日期范围（最多 90 天）'}</Text></Pressable>{dateError && <Text accessibilityRole="alert" style={{ color: '#D73535', fontSize: 14 }}>{language === 'en' ? 'Enter valid dates in order, within 90 days.' : '请输入有效日期，开始日期不能晚于结束日期，范围最多 90 天。'}</Text>}</View>}
     {period !== '自定义' && <View style={[ui.between, { marginTop: -8, marginBottom: 12 }]}><IconButton name="arrow" label="上一个时间段" onPress={() => { setOffset(n => n - 1); setSelectedDay(null); }}/><Text style={{ color: c.text, fontSize: 14, fontWeight: '500' }}>{period === '月' ? `${range.start.getFullYear()}年${range.start.getMonth() + 1}月` : period === '日' ? dateLabel(range.start) : `${dateLabel(range.start)} — ${dateLabel(range.days.at(-1)!)}`}</Text><IconButton name="chevron" label="下一个时间段" disabled={offset >= 0} onPress={() => { setOffset(n => n + 1); setSelectedDay(null); }}/></View>}
     <View style={wide ? { flexDirection: 'row', gap: 22 } : undefined}>
       <View style={{ flex: wide ? 1.5 : undefined, minWidth: 0 }}>
