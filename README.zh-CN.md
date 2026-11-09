@@ -130,3 +130,12 @@ scripts/             开发与打包工具
 ## 开源许可
 
 应用源代码采用 [MIT License](LICENSE)。内置音频的 CC0 授权及来源见 [`assets/audio/CC0-LICENSES.json`](assets/audio/CC0-LICENSES.json)；Expo 模板的原始许可声明保留于 [NOTICE](NOTICE)。
+
+
+## 界面预览
+
+以下截图来自手机尺寸下的网页版本。
+
+| 计时 | 统计 | 目标设置 |
+|:---:|:---:|:---:|
+| ![计时](docs/screenshots/timer.png) | ![统计](docs/screenshots/statistics.png) | ![目标设置](docs/screenshots/goals.png) |

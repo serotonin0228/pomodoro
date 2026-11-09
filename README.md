@@ -19,6 +19,14 @@
 
 Pomodoro is a cross-platform focus timer built with **React Native**, **Expo**, and **TypeScript**. It combines configurable focus sessions, a distraction-free interface, activity insights, and optional cloud synchronization. The timer and local history work without an account.
 
+## Screenshots
+
+Screenshots are from the web version at a phone-sized viewport.
+
+| Timer | Statistics | Goals |
+|:---:|:---:|:---:|
+| ![Timer](docs/screenshots/timer.png) | ![Statistics](docs/screenshots/statistics.png) | ![Goals](docs/screenshots/goals.png) |
+
 ## Features
 
 - **Flexible sessions** — Count down or count up; pause, resume, save, or discard a session. Configure focus time, short and long breaks, and automatic cycles.
