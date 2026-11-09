@@ -70,6 +70,7 @@ function Workspace() {
   const authLock = useRef(false);
   const [durationDraft, setDurationDraft] = useState('25');
   const [historyQuery, setHistoryQuery] = useState('');
+  const [historyLimit, setHistoryLimit] = useState(50);
   const [historyMode, setHistoryMode] = useState<'全部' | '倒计时' | '正计时'>('全部');
   const [reduceMotion, setReduceMotion] = useState(false);
   const fade = useRef(new Animated.Value(1)).current;
@@ -265,7 +266,7 @@ function Workspace() {
       {ws.session && <>{!owner && active && <Button label="在此设备接管" onPress={() => setDialog({ title: '接管当前计时？', body: '计时保持连续，后续操作和到时提醒转移到此设备。离线设备上已安排的提醒可能无法及时取消。', action: '接管计时', onConfirm: () => { ws.takeover(); setSheet(null); } })}/>}<View style={{ marginBottom: 24 }}><Button label="立即同步" secondary onPress={() => { void ws.retry().catch(() => setDialog({ title: '同步失败', body: '请检查网络连接，记录仍保存在本机。' })); }}/></View></>}
       {renderAccount()}
     </>;
-    if (sheet === 'history') { const filtered = liveRecords.filter(r => (historyMode === '全部' || (historyMode === '倒计时' ? r.mode === 'countdown' : r.mode === 'stopwatch')) && (!historyQuery.trim() || `${new Date(r.start).toLocaleDateString(locale)} ${new Date(r.start).toISOString().slice(0, 10)} ${formatDuration(r.seconds)}`.includes(historyQuery.trim()))); return <><TextInput accessibilityLabel="搜索日期或时长" placeholder="搜索日期或时长" placeholderTextColor={c.secondary} value={historyQuery} onChangeText={setHistoryQuery} style={[ui.input, { backgroundColor: c.surface, color: c.text, marginBottom: 12 }]}/><Segments options={['全部', '倒计时', '正计时']} value={historyMode} onChange={setHistoryMode}/>{filtered.length ? [...filtered].reverse().map(r => <RecordRow key={r.id} record={r} onPress={() => showRecord(r)}/>) : <Text style={{ color: c.secondary, textAlign: 'center', padding: 30 }}>没有符合条件的记录</Text>}<Button label="导出 CSV" secondary onPress={doExport}/></>; }
+    if (sheet === 'history') { const filtered = liveRecords.filter(r => (historyMode === '全部' || (historyMode === '倒计时' ? r.mode === 'countdown' : r.mode === 'stopwatch')) && (!historyQuery.trim() || `${new Date(r.start).toLocaleDateString(locale)} ${new Date(r.start).toISOString().slice(0, 10)} ${formatDuration(r.seconds)}`.includes(historyQuery.trim()))); return <><TextInput accessibilityLabel="搜索日期或时长" placeholder="搜索日期或时长" placeholderTextColor={c.secondary} value={historyQuery} onChangeText={value => { setHistoryQuery(value); setHistoryLimit(50); }} style={[ui.input, { backgroundColor: c.surface, color: c.text, marginBottom: 12 }]}/><Segments options={['全部', '倒计时', '正计时']} value={historyMode} onChange={value => { setHistoryMode(value); setHistoryLimit(50); }}/>{filtered.length ? [...filtered].reverse().slice(0, historyLimit).map(r => <RecordRow key={r.id} record={r} onPress={() => showRecord(r)}/>) : <Text style={{ color: c.secondary, textAlign: 'center', padding: 30 }}>没有符合条件的记录</Text>}{filtered.length > historyLimit && <Button label="加载更多" secondary onPress={() => setHistoryLimit(n => n + 50)}/>}<Button label="导出 CSV" secondary onPress={doExport}/></>; }
     return null;
   }
   if (!ready) return null;

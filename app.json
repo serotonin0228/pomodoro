@@ -55,7 +55,8 @@
       ],
       "./plugins/withReleaseSigning.cjs",
       "./plugins/withFocusNative.cjs",
-      "./plugins/withPlainLaunch.cjs"
+      "./plugins/withPlainLaunch.cjs",
+      "expo-secure-store"
     ],
     "scheme": "pomodoro"
   }

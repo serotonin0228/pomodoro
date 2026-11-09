@@ -6,6 +6,7 @@ export const english: Record<string, string> = {
   "结束日期": "End date",
   "已恢复上次计时": "Previous timer restored",
   "云端空间已满，请导出记录": "Cloud storage limit reached; export your records",
+  "加载更多": "Load more",
   "记录已删除": "Record deleted",
   "目标类型": "Goal type",
   "每日时长": "Daily time",

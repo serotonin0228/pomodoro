@@ -3,10 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { State } from './model';
 import { setTimeCorrection } from './time';
+import { sessionStorage } from './sessionStorage';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-export const cloud = url && key ? createClient(url, key, { auth: { storage: AsyncStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: Platform.OS === 'web' } }) : null;
+export const cloud = url && key ? createClient(url, key, { auth: { storage: sessionStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: Platform.OS === 'web' } }) : null;
 export type CloudRow = { user_id: string; revision: number; payload: State; writer: string; updated_at: string };
 let lastClockCheck = 0;
 export async function fetchCloud(session: Session): Promise<CloudRow | null> {
