@@ -31,11 +31,13 @@ Screenshots are from the web version at a phone-sized viewport.
 
 - **Flexible sessions** — Count down or count up; pause, resume, save, or discard a session. Configure focus time, short and long breaks, and automatic cycles.
 - **Focus insights** — Browse daily, weekly, and monthly activity, set a daily target, review your session history, and export records as CSV.
-- **Ambient audio** — Play bundled, looping piano tracks independently of the timer.
+- **Ambient audio** — Download music from your account’s cloud catalog, track download progress and updates, and play cached audio offline using a native background queue. See [music library management](docs/music-library.md).
 - **Personalized appearance** — Light and dark themes, English and Simplified Chinese, and layouts for phones and tablets.
 - **Local-first storage** — Keep guest sessions on-device using AsyncStorage. An account is not required for core timer features.
 - **Optional sync** — Connect your own Supabase project for email authentication, multi-device synchronization, and explicit conflict handling.
 - **Platform notifications** — Local completion reminders and an Android foreground timer service with pause/resume controls.
+
+- **App limits (Android)** — A local blocklist or allowlist returns restricted apps to Pomodoro during focus sessions. Requires user-enabled accessibility access. Pauses, breaks and deadlines release restrictions; phone, launcher and system settings stay available. See [implementation and limits](docs/app-limits.md).
 
 ## Getting started
 
@@ -137,4 +139,4 @@ Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## License
 
-The application source code is available under the [MIT License](LICENSE). The bundled audio has separate CC0 source information in [`assets/audio/CC0-LICENSES.json`](assets/audio/CC0-LICENSES.json). Original Expo template notices are retained in [NOTICE](NOTICE).
+The application source code is available under the [MIT License](LICENSE). The selected background tracks are supplied by the user for their personal build; they are not covered by the source code license. Original Expo template notices are retained in [NOTICE](NOTICE).

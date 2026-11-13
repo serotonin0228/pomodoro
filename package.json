@@ -1,6 +1,6 @@
 {
   "name": "pomodoro",
-  "version": "1.0.5",
+  "version": "1.2.7",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
@@ -39,7 +39,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/model.test.ts tests/i18n.test.ts",
+    "test": "node --import tsx --test tests/model.test.ts tests/i18n.test.ts tests/nativePlaylist.test.ts tests/startup.test.ts",
     "build": "expo export --platform web",
     "test:e2e": "playwright test",
     "lint": "expo lint",

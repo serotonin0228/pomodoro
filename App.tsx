@@ -1,13 +1,13 @@
 import { LocalizedText as Text, LocalizedPressable as Pressable, LocalizedTextInput as TextInput, LanguageContext, useAppLanguage, translate } from './src/i18n';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, AppState, Linking, Modal, NativeModules, PanResponder, Platform, ScrollView, StyleSheet, useColorScheme, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Linking, Modal, NativeModules, PanResponder, Platform, ScrollView, StyleSheet, useColorScheme, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { setBackgroundColorAsync } from 'expo-system-ui';
 import { BlurTargetView, BlurView } from 'expo-blur';
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlaylist, useAudioPlaylistStatus } from 'expo-audio';
 import { Icon } from './src/Icon';
-import { IOSMenu } from './src/IOSMenu';
+import { IOSMenu, MenuHost } from './src/IOSMenu';
 import { useWorkspace } from './src/useWorkspace';
 import { clock, displaySeconds, elapsed, finishState, FocusRecord, formatDuration, Mode, newTimer, pauseState, Settings } from './src/model';
 import { cancelReminder, notificationPermission, notifyWeb, requestNotifications, scheduleReminder } from './src/notifications';
@@ -17,14 +17,18 @@ import { Button, dark, Group, IconButton, light, Row, Segments, Stepper, Theme, 
 import { RecordRow, Stats } from './src/Stats';
 import { timeNow } from './src/time';
 import { authErrorMessage } from './src/auth';
-const tracks = Array.from({ length: 6 }, (_, index) => ({ name: ['Forget Me Not', 'JRPG Piano', 'Piano Solo', 'Regret', 'Vaporware', 'At the End of Hope'][index], source: [require('./assets/audio/cc0-0.m4a'), require('./assets/audio/cc0-1.m4a'), require('./assets/audio/cc0-2.m4a'), require('./assets/audio/cc0-3.m4a'), require('./assets/audio/cc0-4.m4a'), require('./assets/audio/cc0-5.m4a')][index] }));
-type Sheet = 'music' | 'duration' | 'cloud' | 'history' | 'goal' | null;
+import { useCloudMusic } from './src/useCloudMusic';
+import { musicKey } from './src/musicCatalog';
+import { replaceMusicQueue } from './src/nativePlaylist';
+import { FocusGuardPanel, useFocusGuard } from './src/FocusGuard';
+
+type Sheet = 'settings' | 'guard' | 'music' | 'duration' | 'cloud' | 'history' | 'goal' | null;
 type Dialog = { title: string; body: string; action?: string; danger?: boolean; onConfirm?: () => void; discard?: () => void } | null;
-const titles: Record<NonNullable<Sheet>, string> = { music: '背景音乐', duration: '计时', cloud: '云同步', history: '全部专注记录', goal: '统计目标' };
+const titles: Record<NonNullable<Sheet>, string> = { settings: '设置', guard: '应用限制', music: '背景音乐', duration: '计时', cloud: '云同步', history: '全部专注记录', goal: '统计目标' };
 export default function App() { return <SafeAreaProvider><Workspace /></SafeAreaProvider>; }
 function Workspace() {
   const ws = useWorkspace();
-  const { state, update, device, ready } = ws;
+  const { state, update, device, ready, readState } = ws;
   const { timer, settings, records } = state;
   const { language, setLanguage } = useAppLanguage();
   const locale = language === 'en' ? 'en-US' : 'zh-CN';
@@ -39,6 +43,7 @@ function Workspace() {
   const blurTarget = useRef<React.ComponentRef<typeof View>>(null);
   const [tab, setTab] = useState<'timer' | 'stats'>('timer');
   const [sheet, setSheetState] = useState<Sheet>(null);
+  const dismissMenu = useRef<(() => boolean) | null>(null);
   const sheetY = useRef(new Animated.Value(height)).current;
   const setSheet = useCallback((value: Sheet) => { if (value) { sheetY.setValue(height); setSheetState(value); Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, damping: 27, stiffness: 240 }).start(); } else { Animated.timing(sheetY, { toValue: height, duration: 240, useNativeDriver: true }).start(({ finished }) => { if (finished) setSheetState(null); }); } }, [height, sheetY]);
   const sheetScrollY = useRef(0);
@@ -50,8 +55,32 @@ function Workspace() {
   const [now, setNow] = useState(timeNow());
   const recoveryShown = useRef(false);
   useEffect(() => { if (!ready || recoveryShown.current) return; recoveryShown.current = true; if (timer.status === 'running' || timer.status === 'paused') setToast(t('已恢复上次计时')); }, [ready, timer.status]);
-  const track = Math.max(0, Math.min(tracks.length - 1, settings.musicTrack || 0));
-  const setTrack = (value: number) => update(s => ({ ...s, settings: { ...s.settings, musicTrack: value } }));
+  const music = useCloudMusic(ws.session?.user.id ?? null);
+  const tracks = useMemo(() => music.tracks.filter(item => item.user_id === ws.session?.user.id).map(item => ({ ...item, name: item.title, source: music.source(item) })), [music.tracks, music.sources, ws.session?.user.id]);
+  const selectedIndex = tracks.findIndex(item => item.id === settings.musicTrackId);
+  const savedTrack = selectedIndex >= 0 ? selectedIndex : Math.max(0, Math.min(tracks.length - 1, settings.musicTrack || 0));
+  // Queue order is chosen up front so native playback never waits for JavaScript at a track boundary.
+  const queueOrder = useMemo(() => {
+    const order = tracks.map((item, index) => item.source ? index : -1).filter(index => index >= 0);
+    if (settings.musicMode === 'shuffle') {
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+    }
+    return order;
+  }, [settings.musicMode, tracks]);
+  const queueKey = JSON.stringify(queueOrder.map(index => [tracks[index].id, tracks[index].source]));
+  const selectionRequest = useRef(0);
+  const setTrack = (value: number) => {
+    const item = tracks[value];
+    if (!item) return;
+    const request = ++selectionRequest.current;
+    update(s => ({ ...s, settings: { ...s.settings, musicTrack: value, musicTrackId: item.id } }));
+    setMusicOverride('play');
+    if (item.source) retryQueue(value => value + 1);
+    if (!item.source) void music.ensureDownloaded(item).catch(() => { if (selectionRequest.current === request) setMusicOverride('pause'); });
+  };
   const [musicOverride, setMusicOverride] = useState<'play' | 'pause' | null>(null);
   const musicEnabled = settings.musicEnabled;
   const wantsMusic = musicOverride === 'play' || (musicOverride !== 'pause' && musicEnabled && timer.status === 'running' && (timer.phase === 'focus' || settings.musicDuringBreak));
@@ -76,13 +105,46 @@ function Workspace() {
   const fade = useRef(new Animated.Value(1)).current;
   const pageFade = useRef(new Animated.Value(1)).current;
   useEffect(() => { if (reduceMotion) { pageFade.setValue(1); return; } pageFade.setValue(0); Animated.timing(pageFade, { toValue: 1, duration: 220, useNativeDriver: true }).start(); }, [tab, reduceMotion, pageFade]);
-  const player = useAudioPlayer(tracks[track].source);
-  const audio = useAudioPlayerStatus(player);
+  // Keep one native player alive across mode switches and catalog/cache updates.
+  const player = useAudioPlaylist({ sources: [], loop: 'all' });
+  const [queueAttempt, retryQueue] = useState(0);
+  const latestPlayer = useRef(player);
+  useLayoutEffect(() => { latestPlayer.current = player; }, [player]);
+  const buildingQueue = useRef(false);
+  const builtQueue = useRef('');
+  const queuedSources = useRef<{ id: string; source: string }[]>([]);
+  useLayoutEffect(() => {
+    if (builtQueue.current === queueKey) return;
+    const previous = queuedSources.current[player.currentIndex];
+    const previousTime = player.currentTime;
+    const latest = readState().settings;
+    const desired = tracks.findIndex(item => item.id === latest.musicTrackId);
+    const value = desired >= 0 ? desired : Math.max(0, Math.min(tracks.length - 1, latest.musicTrack || 0));
+    const target = Math.max(0, queueOrder.indexOf(value));
+    const sources = queueOrder.map(index => ({ id: tracks[index].id, source: tracks[index].source! }));
+    buildingQueue.current = true;
+    try {
+      replaceMusicQueue(player, sources, latest.musicMode === 'single', target);
+      if (sources[target]?.id === previous?.id && sources[target]?.source === previous?.source && previousTime > 0) void player.seekTo(previousTime).catch(() => {});
+      queuedSources.current = sources;
+      builtQueue.current = queueKey;
+    } catch {
+      builtQueue.current = '';
+      setMusicError('播放失败');
+      setMusicOverride('pause');
+      try { player.pause(); } catch { /* Keep queue failures out of React's render lifecycle. */ }
+    } finally { buildingQueue.current = false; }
+  }, [player, queueKey, queueOrder, tracks, readState, queueAttempt]);
+  const audio = useAudioPlaylistStatus(player);
+  const track = queueOrder[audio.currentIndex] ?? savedTrack;
+  const currentTrack = tracks[track];
+  const [audioModeReady, setAudioModeReady] = useState(false);
   const chime = useAudioPlayer(require('./assets/audio/chime.m4a'));
   const owner = timer.device === device || timer.status === 'idle';
   const active = timer.status === 'running' || timer.status === 'paused';
   const liveRecords = records.filter(r => !r.deleted);
   const [nativeReady, setNativeReady] = useState(Platform.OS !== 'android');
+  const focusGuard = useFocusGuard(timer, owner, ready);
   useEffect(() => {
     if (!ready || Platform.OS !== 'android' || !NativeModules.FocusStatus) return;
     let busy = false;
@@ -100,17 +162,60 @@ function Workspace() {
   useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion); const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion); return () => sub.remove(); }, []);
   useEffect(() => { const t = setInterval(() => { if (AppState.currentState === 'active') setNow(timeNow()); }, timer.status === 'running' ? 1000 : 60000); const sub = AppState.addEventListener('change', v => { if (v === 'active') { setNow(timeNow()); void notificationPermission().then(setPermission); } }); return () => { clearInterval(t); sub.remove(); }; }, [timer.status]);
   useEffect(() => { void notificationPermission().then(setPermission).catch(() => setPermission('unsupported')); }, []);
-  useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'mixWithOthers' }).catch(() => setMusicError('无法启用后台音频，仍可在前台播放。')); }, []);
-  useEffect(() => { player.loop = settings.musicMode === 'single'; }, [player, settings.musicMode]);
-  useEffect(() => { if (!audio.didJustFinish || settings.musicMode === 'single' || !wantsMusic) return; const next = settings.musicMode === 'shuffle' ? (track + 1 + Math.floor(Math.random() * (tracks.length - 1))) % tracks.length : (track + 1) % tracks.length; setTrack(next); }, [audio.didJustFinish, player]);
   useEffect(() => {
-    if (!audio.isLoaded) return;
-    let level = wantsMusic ? 0 : player.volume;
-    try { if (wantsMusic) { player.volume = 0; player.play(); } setMusicError(''); } catch { setMusicError('音频暂时无法播放，请重试。'); setMusicOverride('pause'); return; }
-    const ramp = setInterval(() => { try { level = Math.max(0, Math.min(1, level + (wantsMusic ? .1 : -.1))); player.volume = level; if (level === 0 || level === 1) { clearInterval(ramp); if (!wantsMusic) player.pause(); } } catch { clearInterval(ramp); } }, 80);
-    return () => clearInterval(ramp);
-  }, [player, wantsMusic, audio.isLoaded]);
-  useEffect(() => { if (Platform.OS !== 'web') { try { player.clearLockScreenControls(); } catch { /* No media controls are registered. */ } } }, [player]);
+    let live = true;
+    void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' })
+      .then(() => { if (live) setAudioModeReady(true); })
+      .catch(() => { if (live) setMusicError('播放失败'); });
+    return () => { live = false; };
+  }, []);
+  useEffect(() => { try { player.loop = readState().settings.musicMode === 'single' ? 'single' : 'all'; } catch { setMusicError('播放失败'); } }, [player, settings.musicMode, readState]);
+  useEffect(() => {
+    const item = tracks[savedTrack];
+    if (!wantsMusic || !music.ready || !item || item.source) return;
+    void music.ensureDownloaded(item).catch(() => setMusicOverride('pause'));
+  }, [wantsMusic, music.ready, savedTrack, tracks, music.ensureDownloaded]);
+  useEffect(() => { if (sheet === 'music' && music.ready) void music.refresh(); }, [sheet, music.ready, music.refresh]);
+  useEffect(() => {
+    const changed = player.addListener('trackChanged', ({ currentIndex }) => {
+      // Android can deliver old events together when JavaScript resumes.
+      if (buildingQueue.current || builtQueue.current !== queueKey || latestPlayer.current !== player || player.currentIndex !== currentIndex) return;
+      const requested = tracks.find(item => item.id === readState().settings.musicTrackId);
+      if (requested && !requested.source) return;
+      const value = queueOrder[currentIndex];
+      if (value !== undefined && readState().settings.musicTrackId !== tracks[value].id) update(s => ({ ...s, settings: { ...s.settings, musicTrack: value, musicTrackId: tracks[value].id } }));
+    });
+    const status = player.addListener('playlistStatusUpdate', value => {
+      if ('error' in value && value.error) { setMusicError('播放失败'); setMusicOverride('pause'); }
+    });
+    return () => { changed.remove(); status.remove(); };
+  }, [player, queueKey, queueOrder, tracks, readState, update]);
+  useEffect(() => {
+    if (!ready) return;
+    const latest = readState().settings;
+    const desired = tracks.findIndex(item => item.id === latest.musicTrackId);
+    const value = desired >= 0 ? desired : Math.max(0, Math.min(tracks.length - 1, latest.musicTrack || 0));
+    const index = queueOrder.indexOf(value);
+    try { if (builtQueue.current === queueKey && index >= 0 && player.currentIndex !== index) player.skipTo(index); } catch { setMusicError('播放失败'); setMusicOverride('pause'); }
+  }, [ready, player, queueKey, queueOrder, savedTrack, readState, tracks]);
+  useEffect(() => {
+    try {
+      if (!audioModeReady || !ready || !queueOrder.length || builtQueue.current !== queueKey) { player.pause(); if (Platform.OS !== 'web') player.setActiveForLockScreen(false); return; }
+      // All playback operations are immediate native commands. A JS volume ramp can freeze mid-ramp in the background.
+      player.volume = 1;
+      if (wantsMusic) {
+        if (Platform.OS !== 'web') player.setActiveForLockScreen(true, { title: 'Pomodoro' });
+        player.play();
+      } else {
+        player.pause();
+        if (Platform.OS !== 'web') player.setActiveForLockScreen(false);
+      }
+      setMusicError('');
+    } catch { setMusicError('播放失败'); setMusicOverride('pause'); }
+  }, [player, wantsMusic, audioModeReady, ready, queueKey, queueOrder.length]);
+  useEffect(() => { if (musicError) setToast(t('播放失败')); }, [musicError]);
+  useEffect(() => { if (music.error) setToast(t('下载失败')); }, [music.error]);
+  useEffect(() => () => { try { player.pause(); player.clearLockScreenControls(); if (Platform.OS === 'web') player.destroy(); } catch { /* The released playlist has already detached. */ } }, [player]);
   useEffect(() => {
     if (!ready) return;
     if (settings.notifications && owner && permission === 'granted') void scheduleReminder(timer, settings.sound, language).catch(() => setPermission('error'));
@@ -154,7 +259,7 @@ function Workspace() {
     if (!owner && active) { setSheet('cloud'); return; }
     if (timer.status === 'completed') { nextPhase(timer.phase === 'focus' ? 'break' : 'focus', true); return; }
     if (timer.status === 'running') { setMusicOverride(null); update(s => pauseState(s)); }
-    else { setMusicOverride(null); update(s => ({ ...s, timer: { ...s.timer, status: 'running', startedAt: timeNow(), createdAt: s.timer.status === 'idle' ? timeNow() : s.timer.createdAt, device } })); }
+    else { setMusicOverride(null); const started = timeNow(); update(s => ({ ...s, timer: { ...s.timer, status: 'running', startedAt: started, createdAt: s.timer.status === 'idle' ? started : s.timer.createdAt, device } })); }
   }
   function end() { setDialog({ title: timer.phase === 'focus' ? '结束本次专注？' : '结束休息？', body: timer.phase === 'focus' ? '实际专注时间会保存，暂停时间不会计入。' : '休息时间不会计入专注统计。', action: timer.phase === 'focus' ? '结束并保存' : '结束休息', discard: timer.phase === 'focus' && elapsed(timer, timeNow()) <= 300 ? () => update(s => ({ ...s, timer: newTimer(device, s.settings, s.timer.mode), segments: [] })) : undefined, onConfirm: () => update(s => ({ ...finishState(s), timer: newTimer(device, s.settings, s.timer.mode), segments: [] })) }); }
   function setSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
@@ -214,12 +319,12 @@ function Workspace() {
     return <View style={[s.timerPage, { minHeight: wide ? Math.max(520, height - 205) : Math.max(480, height - Math.max(insets.top, 14) - Math.max(insets.bottom, 12) - 124) }]}>
       <View style={{ width: '100%', maxWidth: 320, alignSelf: 'center' }}><Segments options={['倒计时', '正计时']} value={timer.mode === 'countdown' ? '倒计时' : '正计时'} onChange={v => changeMode(v === '倒计时' ? 'countdown' : 'stopwatch')}/></View>
       <Animated.View style={[s.clockArea, { opacity: fade, paddingTop: wide ? 96 : Math.max(100, height * .18), paddingBottom: wide ? 72 : 54 }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="调整计时时长" onPress={() => { setDurationDraft(String(settings.focusMinutes)); setSheet('duration'); }}><View testID="timer-digits" accessibilityLabel={clock(displaySeconds(timer, now))} style={{ flexDirection: 'row', justifyContent: 'center', width: Math.min(width - 48, 560), paddingHorizontal: 8 }}>{timeText.split('').map((digit, i) => <Text key={i} maxFontSizeMultiplier={1} style={[s.digits, { color: c.text, textAlign: 'center', width: (digit === ':' ? .34 : .7) * timeFont, fontSize: timeFont, lineHeight: Math.ceil(timeFont * 1.2), paddingHorizontal: 0 }]}>{digit}</Text>)}</View></Pressable>
+        <View testID="timer-digits" accessibilityLabel={clock(displaySeconds(timer, now))} style={{ flexDirection: 'row', justifyContent: 'center', width: Math.min(width - 48, 560), paddingHorizontal: 8 }}>{timeText.split('').map((digit, i) => <Text key={i} maxFontSizeMultiplier={1} style={[s.digits, { color: c.text, textAlign: 'center', width: (digit === ':' ? .34 : .7) * timeFont, fontSize: timeFont, lineHeight: Math.ceil(timeFont * 1.2), paddingHorizontal: 0 }]}>{digit}</Text>)}</View>
         {<View style={{ flexDirection: 'row', gap: 5, marginTop: 22, alignItems: 'center', minHeight: 15, opacity: timer.mode === 'countdown' ? 1 : 0 }}>{Array.from({ length: settings.rounds }, (_, i) => <View key={i} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: i < state.round % settings.rounds ? c.blue : c.muted, opacity: i < state.round % settings.rounds ? 1 : .5 }}/>)}</View>}
       </Animated.View>
-      <View style={{ width: 220, alignSelf: 'center', minHeight: 104 }}><Button label={buttonLabel} disabled={!ready} onPress={primary} icon={timer.status === 'running' && owner ? 'pause' : 'play'}/>{active && owner ? <Pressable accessibilityRole="button" onPress={end} style={ui.textButton}><Text style={{ color: c.secondary, fontSize: 14 }}>结束专注</Text></Pressable> : timer.status === 'completed' ? <Pressable accessibilityRole="button" onPress={() => nextPhase('focus', true)} style={ui.textButton}><Text style={{ color: c.blue, fontSize: 14 }}>返回专注</Text></Pressable> : null}</View>
+      <View style={{ width: 220, alignSelf: 'center', minHeight: 104 }}><Button label={buttonLabel} onPress={primary} icon={timer.status === 'running' && owner ? 'pause' : 'play'}/>{active && owner ? <Pressable accessibilityRole="button" onPress={end} style={ui.textButton}><Text style={{ color: c.secondary, fontSize: 14 }}>结束专注</Text></Pressable> : timer.status === 'completed' ? <Pressable accessibilityRole="button" onPress={() => nextPhase('focus', true)} style={ui.textButton}><Text style={{ color: c.blue, fontSize: 14 }}>返回专注</Text></Pressable> : null}</View>
       <View style={{ flex: 1, minHeight: 30 }}/>
-      <Pressable accessibilityRole="button" accessibilityLabel="打开背景音乐" onPress={() => setSheet('music')} style={({ pressed }) => [s.musicBar, { backgroundColor: c.surface, opacity: pressed ? .7 : 1 }]}><View style={s.musicTile}><Icon name={audio.playing ? 'wave' : 'music'} color={c.blue} size={22}/></View><View style={{ flex: 1 }}><Text style={{ color: c.text, fontSize: 16, fontWeight: '500' }}>{tracks[track].name}</Text></View><Icon name="chevron" color={c.muted} size={16}/></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="打开背景音乐" onPress={() => setSheet('music')} style={({ pressed }) => [s.musicBar, { backgroundColor: c.surface, opacity: pressed ? .7 : 1 }]}><View style={s.musicTile}><Icon name={audio.playing ? 'wave' : 'music'} color={c.blue} size={22}/></View><View style={{ flex: 1 }}><Text style={{ color: c.text, fontSize: 16, fontWeight: '500' }}>{currentTrack?.name ?? '背景音乐'}</Text></View><Icon name="chevron" color={c.muted} size={16}/></Pressable>
     </View>;
   }
   function renderAccount() {
@@ -246,14 +351,22 @@ function Workspace() {
     </>}</>;
   }
   function renderSheet() {
+    if (sheet === 'settings') return <><Group><IOSMenu label="语言" value={language} options={[{ value: 'zh', label: '简体中文' }, { value: 'en', label: 'English' }]} onChange={setLanguage}/><Row label="云同步" onPress={() => setSheet('cloud')}/>{Platform.OS === 'android' && <Row label="应用限制" onPress={() => setSheet('guard')}/>}<Row label="番茄钟设置" onPress={() => { setDurationDraft(String(settings.focusMinutes)); setSheet('duration'); }} last/></Group></>;
+    if (sheet === 'guard') return <FocusGuardPanel guard={focusGuard}/>;
     if (sheet === 'music') return <>
-      <Group><Toggle label="专注时播放背景音乐" value={musicEnabled} onChange={v => { setMusicEnabled(v); setMusicOverride(null); }}/><IOSMenu label="播放模式" value={settings.musicMode} options={[{ value: 'single', label: '单曲循环' }, { value: 'sequence', label: '顺序播放' }, { value: 'shuffle', label: '随机播放' }]} onChange={v => setSetting('musicMode', v)}/><IOSMenu label="曲目" value={track} options={tracks.map((item, index) => ({ label: item.name, value: index }))} onChange={setTrack} last/></Group>
-      <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, ...iosCorners(26), backgroundColor: c.surface }}><Icon name={audio.playing ? 'wave' : 'music'} size={28} color={c.blue}/><Text style={{ flex: 1, color: c.text, fontSize: 17, fontWeight: '600' }}>{tracks[track].name}</Text><IconButton name="arrow" label="上一首" onPress={() => setTrack((track + tracks.length - 1) % tracks.length)}/><IconButton name={wantsMusic ? 'pause' : 'play'} label={wantsMusic ? '暂停播放' : '试听音乐'} onPress={() => setMusicOverride(wantsMusic ? 'pause' : 'play')}/><IconButton name="chevron" label="下一首" onPress={() => setTrack((track + 1) % tracks.length)}/></View>
-      {!!musicError && <Text style={{ color: '#D73535', marginTop: 12 }}>{musicError}</Text>}
-      <View style={{ marginTop: 28 }}><Group><Toggle label="休息时继续播放" value={settings.musicDuringBreak} onChange={v => setSetting('musicDuringBreak', v)} last/></Group></View>
+      <Group><Toggle label="专注时播放背景音乐" value={musicEnabled} onChange={v => { setMusicEnabled(v); setMusicOverride(null); }}/><IOSMenu label="播放模式" value={settings.musicMode} options={[{ value: 'single', label: '单曲循环' }, { value: 'sequence', label: '顺序播放' }, { value: 'shuffle', label: '随机播放' }]} onChange={v => setSetting('musicMode', v)}/><Toggle label="休息时继续播放" value={settings.musicDuringBreak} onChange={v => setSetting('musicDuringBreak', v)} last/></Group>
+      {!ws.session ? <Button label="登录" onPress={() => setSheet('cloud')}/> : <>
+        {!music.ready && !tracks.length && <ActivityIndicator color={c.blue} style={{ marginVertical: 24 }}/>}
+        {!!tracks.length && <Group>{tracks.map((item, index) => {
+          const downloading = music.progress[musicKey(item)];
+          const playing = item.id === currentTrack?.id && audio.playing;
+          const action = downloading !== undefined ? '下载中' : item.source ? (playing ? '暂停' : '播放') : '下载';
+          return <View key={item.id} style={{ minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, borderBottomWidth: index === tracks.length - 1 ? 0 : StyleSheet.hairlineWidth, borderBottomColor: c.line }}><Text numberOfLines={2} style={{ flex: 1, color: playing ? c.blue : c.text, fontSize: 16 }}>{item.name}</Text><Pressable accessibilityRole="button" accessibilityLabel={`${t(action)} ${item.name}`} accessibilityState={{ selected: currentTrack?.id === item.id }} aria-selected={currentTrack?.id === item.id} disabled={downloading !== undefined} onPress={() => { if (playing) { selectionRequest.current++; setMusicOverride('pause'); } else setTrack(index); }} style={{ minWidth: 54, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>{downloading !== undefined ? <Text style={{ color: c.blue, fontSize: 12 }}>{Math.round(downloading * 100)}%</Text> : <Icon name={item.source ? (playing ? 'pause' : 'play') : 'download'} color={c.blue} size={22}/>}</Pressable></View>;
+        })}</Group>}
+      </>}
     </>;
     if (sheet === 'duration') return <>
-      {timer.mode === 'countdown' && <><View style={{ flexDirection: 'row', gap: 10 }}>{[15, 25, 45, 60].map(v => <Pressable key={v} accessibilityRole="button" onPress={() => setDurationDraft(String(v))} style={{ flex: 1, paddingVertical: 17, alignItems: 'center', ...iosCorners(999), backgroundColor: Number(durationDraft) === v ? c.blue : 'transparent' }}><Text style={{ color: Number(durationDraft) === v ? '#fff' : c.text, fontWeight: '600' }}>{v} 分钟</Text></Pressable>)}</View>
+      {<><View style={{ flexDirection: 'row', gap: 10 }}>{[15, 25, 45, 60].map(v => <Pressable key={v} accessibilityRole="button" onPress={() => setDurationDraft(String(v))} style={{ flex: 1, paddingVertical: 17, alignItems: 'center', ...iosCorners(999), backgroundColor: Number(durationDraft) === v ? c.blue : 'transparent' }}><Text style={{ color: Number(durationDraft) === v ? '#fff' : c.text, fontWeight: '600' }}>{v} 分钟</Text></Pressable>)}</View>
       <Text style={[ui.groupTitle, { color: c.secondary, marginTop: 28 }]}>自定义时长（分钟）</Text>
       <TextInput accessibilityLabel="自定义分钟数" value={durationDraft} onChangeText={setDurationDraft} keyboardType="number-pad" maxLength={3} style={[ui.input, { backgroundColor: c.surface, color: c.text, fontSize: 24, textAlign: 'center' }]}/>
       <View style={{ marginTop: 26 }}><Button label={active ? '应用到下次专注' : '设定时长'} disabled={!/^\d+$/.test(durationDraft) || +durationDraft < 1 || +durationDraft > 180} onPress={() => { const v = +durationDraft; setSetting('focusMinutes', v); setSheet(null); }}/></View></>}
@@ -261,7 +374,6 @@ function Workspace() {
     </>;
     if (sheet === 'goal') return <><Group><IOSMenu label="目标类型" value={settings.goalType} options={[{ value: 'dailyMinutes', label: '每日时长' }, { value: 'dailySessions', label: '每日次数' }, { value: 'weeklyMinutes', label: '每周时长' }, { value: 'none', label: '关闭目标' }]} onChange={v => setSetting('goalType', v)} last={settings.goalType === 'none'}/>{settings.goalType === 'dailyMinutes' && <Stepper label="每日目标" value={settings.dailyGoal} onChange={v => setSetting('dailyGoal', v)} min={15} max={720} step={15} last/>}{settings.goalType === 'dailySessions' && <Stepper label="每日次数" value={settings.dailySessions} onChange={v => setSetting('dailySessions', v)} unit="次" min={1} max={50} last/>}{settings.goalType === 'weeklyMinutes' && <Stepper label="每周时长" value={settings.weeklyMinutes} onChange={v => setSetting('weeklyMinutes', v)} min={15} max={5040} step={15} last/>}</Group><Group><Stepper label="连续专注门槛" value={settings.streakMinutes} onChange={v => setSetting('streakMinutes', v)} min={1} max={180} last/></Group></>;
     if (sheet === 'cloud') return <>
-      <Group><IOSMenu label="语言" value={language} options={[{ value: 'zh', label: '简体中文' }, { value: 'en', label: 'English' }]} onChange={setLanguage} last/></Group>
       <Group title="同步状态"><Row label={ws.status}/>{ws.session && <Row label="上次连接" value={ws.lastSyncedAt ? new Date(ws.lastSyncedAt).toLocaleString(locale) : t('尚无')}/>}{ws.session && <Row label={owner ? '由此设备控制' : '由其他设备控制'} value={timer.status === 'running' ? '正在计时' : timer.status === 'paused' ? '已暂停' : '尚未开始'} last/>}</Group>
       {ws.session && <>{!owner && active && <Button label="在此设备接管" onPress={() => setDialog({ title: '接管当前计时？', body: '计时保持连续，后续操作和到时提醒转移到此设备。离线设备上已安排的提醒可能无法及时取消。', action: '接管计时', onConfirm: () => { ws.takeover(); setSheet(null); } })}/>}<View style={{ marginBottom: 24 }}><Button label="立即同步" secondary onPress={() => { void ws.retry().catch(() => setDialog({ title: '同步失败', body: '请检查网络连接，记录仍保存在本机。' })); }}/></View></>}
       {renderAccount()}
@@ -269,12 +381,11 @@ function Workspace() {
     if (sheet === 'history') { const filtered = liveRecords.filter(r => (historyMode === '全部' || (historyMode === '倒计时' ? r.mode === 'countdown' : r.mode === 'stopwatch')) && (!historyQuery.trim() || `${new Date(r.start).toLocaleDateString(locale)} ${new Date(r.start).toISOString().slice(0, 10)} ${formatDuration(r.seconds)}`.includes(historyQuery.trim()))); return <><TextInput accessibilityLabel="搜索日期或时长" placeholder="搜索日期或时长" placeholderTextColor={c.secondary} value={historyQuery} onChangeText={value => { setHistoryQuery(value); setHistoryLimit(50); }} style={[ui.input, { backgroundColor: c.surface, color: c.text, marginBottom: 12 }]}/><Segments options={['全部', '倒计时', '正计时']} value={historyMode} onChange={value => { setHistoryMode(value); setHistoryLimit(50); }}/>{filtered.length ? [...filtered].reverse().slice(0, historyLimit).map(r => <RecordRow key={r.id} record={r} onPress={() => showRecord(r)}/>) : <Text style={{ color: c.secondary, textAlign: 'center', padding: 30 }}>没有符合条件的记录</Text>}{filtered.length > historyLimit && <Button label="加载更多" secondary onPress={() => setHistoryLimit(n => n + 50)}/>}<Button label="导出 CSV" secondary onPress={doExport}/></>; }
     return null;
   }
-  if (!ready) return null;
   return <LanguageContext.Provider value={language}><Theme.Provider value={{ c, isDark, reduceMotion }}><View style={{ flex: 1, backgroundColor: c.bg }}>
     <StatusBar style={isDark ? 'light' : 'dark'}/>
     <BlurTargetView ref={blurTarget} style={{ flex: 1, backgroundColor: c.bg }}><View collapsable={false} pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.bg }]}/><ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: wide ? 36 : 24, paddingTop: Math.max(insets.top, wide ? 22 : 14) + 60, paddingBottom: wide ? 28 : Math.max(insets.bottom, 12) + 70 }} showsVerticalScrollIndicator={false}>
       <Animated.View style={{ width: '100%', maxWidth: tab === 'timer' ? wide ? 680 : 420 : 1040, alignSelf: 'center', paddingTop: wide ? 35 : 5, opacity: pageFade, transform: [{ translateY: pageFade.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }}>
-        {wide && <View style={[ui.between, { marginBottom: 27 }]}><View><Text style={{ color: c.text, fontSize: 25, fontWeight: '700', letterSpacing: -.7 }}>{tab === 'timer' ? '专注当下' : 'Statistics'}</Text></View>{tab === 'stats' && <IconButton name="download" label="导出专注记录" onPress={doExport}/>}</View>}
+        {wide && tab === 'stats' && <View style={[ui.between, { marginBottom: 27 }]}><View><Text style={{ color: c.text, fontSize: 25, fontWeight: '700', letterSpacing: -.7 }}>Statistics</Text></View><IconButton name="download" label="导出专注记录" onPress={doExport}/></View>}
         {!!ws.storageError && <Text accessibilityRole="alert" style={{ color: '#D73535', padding: 12, marginBottom: 12 }}>{ws.storageError}</Text>}
         {tab === 'timer' ? renderTimer() : <Stats onGoal={() => setSheet('goal')} records={records} settings={settings} wide={wide} now={now} onStart={() => setTab('timer')} onExport={doExport} onHistory={() => setSheet('history')} onRecord={showRecord}/>}
       </Animated.View>
@@ -282,12 +393,12 @@ function Workspace() {
     <View style={[s.topbar, { position: 'absolute', zIndex: 2, top: 0, left: 0, right: 0, overflow: 'hidden', paddingTop: Math.max(insets.top, wide ? 22 : 14), borderBottomColor: c.line, borderBottomWidth: StyleSheet.hairlineWidth }]}><BlurView blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" intensity={65} tint={isDark ? 'dark' : 'default'} style={StyleSheet.absoluteFill}/><View style={[s.topbarInner, { maxWidth: 1040 }]}>
       {wide ? <View style={s.brand}><View style={s.brandIcon}><Icon name="timer" color={c.blue} size={23}/></View><View><Text style={{ color: c.text, fontWeight: '700', fontSize: 19 }}>Pomodoro</Text></View></View> : <Text style={[s.largeTitle, { color: c.text }]}>{tab === 'timer' ? 'Pomodoro' : 'Statistics'}</Text>}
       {wide && <View style={[s.desktopTabs, { backgroundColor: c.bg }]}>{(['timer', 'stats'] as const).map(v => <Pressable key={v} accessibilityRole="tab" accessibilityState={{ selected: tab === v }} onPress={() => setTab(v)} style={[s.desktopTab, { backgroundColor: tab === v ? c.surface : 'transparent' }]}><Icon name={v === 'timer' ? 'timer' : 'chart'} size={17} color={tab === v ? c.blue : c.secondary}/><Text style={{ color: tab === v ? c.blue : c.secondary, fontSize: 13, fontWeight: '600' }}>{v === 'timer' ? '计时' : '统计'}</Text></Pressable>)}</View>}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel="云同步" onPress={() => setSheet('cloud')} style={s.syncLink}><Icon name="cloud" size={20} color={c.secondary}/></Pressable><IconButton name={isDark ? 'sun' : 'moon'} label={isDark ? '切换浅色模式' : '切换深色模式'} onPress={() => setSetting('theme', isDark ? 'light' : 'dark')}/></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel="设置" onPress={() => setSheet('settings')} style={s.syncLink}><Icon name="gear" size={20} color={c.secondary}/></Pressable><IconButton name={isDark ? 'sun' : 'moon'} label={isDark ? '切换浅色模式' : '切换深色模式'} onPress={() => setSetting('theme', isDark ? 'light' : 'dark')}/></View>
     </View></View>
     {!wide && <View style={[s.tabbar, { position: 'absolute', bottom: 0, left: 0, right: 0, overflow: 'hidden', borderTopColor: c.line, paddingBottom: Math.max(insets.bottom, 12) }]}><BlurView blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" intensity={65} tint={isDark ? 'dark' : 'default'} style={StyleSheet.absoluteFill}/>{(['timer', 'stats'] as const).map(v => <Pressable key={v} accessibilityRole="tab" accessibilityLabel={v === 'timer' ? '计时' : '统计'} accessibilityState={{ selected: tab === v }} onPress={() => setTab(v)} style={s.tab}><Icon name={v === 'timer' ? 'timer' : 'chart'} color={tab === v ? c.blue : c.secondary} size={23}/><Text style={{ color: tab === v ? c.blue : c.secondary, fontSize: 10, fontWeight: '500', marginTop: 4 }}>{v === 'timer' ? '计时' : '统计'}</Text></Pressable>)}</View>}
     {!sheet && !dialog && !ws.conflict && !!toast && <View pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 60, alignSelf: 'center', backgroundColor: c.surface, paddingHorizontal: 20, paddingVertical: 12, ...iosCorners(20), zIndex: 10 }}><Text style={{ color: c.text }}>{toast}</Text></View>}
-    <Modal visible={!!sheet || !!dialog || !!ws.conflict} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (ws.conflict) return; if (dialog) setDialog(null); else setSheet(null); }} statusBarTranslucent><View style={{ flex: 1 }}>{!!sheet && <View style={[s.modalLayer, { backgroundColor: c.overlay, justifyContent: wide ? 'center' : 'flex-end', padding: wide ? 24 : 0 }]}><Pressable accessibilityLabel="关闭面板" onPress={() => setSheet(null)} style={StyleSheet.absoluteFill}/><Animated.View accessibilityViewIsModal style={[s.sheet, { transform: [{ translateY: sheetY }] }, { backgroundColor: sheet === 'music' ? c.surface : c.bg, maxHeight: height * .91, borderBottomLeftRadius: wide ? 38 : 0, borderBottomRightRadius: wide ? 38 : 0, paddingBottom: Math.max(insets.bottom, 20) }]}>{!wide && <View {...sheetGesture.panHandlers} style={{ paddingTop: 9, paddingBottom: 12 }}><View style={[s.grabber, { backgroundColor: c.muted }]}/></View>}<View {...sheetGesture.panHandlers} style={[s.sheetHeader, { paddingTop: wide ? 22 : 12 }]}><Text style={{ color: c.text, fontSize: 23, fontWeight: '700', letterSpacing: -.5 }}>{sheet === 'duration' ? (timer.mode === 'countdown' ? '倒计时设置' : '正计时设置') : sheet ? titles[sheet] : ''}</Text></View><ScrollView onScroll={e => { sheetScrollY.current = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 6, paddingBottom: 20 }}>{renderSheet()}</ScrollView></Animated.View></View>}
-    {(!!dialog || !!ws.conflict) && <View style={[StyleSheet.absoluteFill, s.dialogLayer, { backgroundColor: c.overlay }]}><View accessibilityViewIsModal style={[s.dialog, { backgroundColor: c.surface }]}><Text style={{ color: c.text, fontSize: 19, fontWeight: '600', textAlign: 'center' }}>{ws.conflict ? '发现两份计时状态' : dialog?.title}</Text><Text style={{ color: c.secondary, fontSize: 16, lineHeight: 24, textAlign: 'center', marginTop: 14, marginBottom: 24 }}>{ws.conflict ? '另一台设备也修改了计时或设置。请选择要继续使用的状态；双方已保存的记录会合并，本机状态会另存恢复备份。' : dialog?.body}</Text>{ws.conflict ? <><Button label="使用云端计时与设置" onPress={() => ws.resolve('remote')}/><View style={{ height: 10 }}/><Button label="保留本机计时与设置" secondary onPress={() => ws.resolve('local')}/></> : <>{dialog?.action && <><Button label={dialog.action} danger={dialog.danger} onPress={() => { const fn = dialog.onConfirm; setDialog(null); fn?.(); }}/><View style={{ height: 8 }}/></>}{dialog?.discard && elapsed(timer, now) <= 300 && <><Button label="结束但不保存" danger onPress={() => { const fn = dialog.discard; setDialog(null); fn?.(); }}/><View style={{ height: 8 }}/></>}<Button label={dialog?.action ? '取消' : '知道了'} secondary onPress={() => setDialog(null)}/></>}</View></View>}{!!toast && <View pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 60, alignSelf: 'center', backgroundColor: c.surface, paddingHorizontal: 20, paddingVertical: 12, ...iosCorners(20), zIndex: 10 }}><Text style={{ color: c.text }}>{toast}</Text></View>}</View></Modal>
+    <Modal visible={!!sheet || !!dialog || !!ws.conflict} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (dismissMenu.current?.()) return; if (ws.conflict) return; if (dialog) setDialog(null); else setSheet(null); }} statusBarTranslucent><MenuHost dismissRef={dismissMenu}><View style={{ flex: 1 }}>{!!sheet && <View style={[s.modalLayer, { backgroundColor: c.overlay, justifyContent: wide ? 'center' : 'flex-end', padding: wide ? 24 : 0 }]}><Pressable accessibilityLabel="关闭面板" onPress={() => setSheet(null)} style={StyleSheet.absoluteFill}/><Animated.View accessibilityViewIsModal style={[s.sheet, { transform: [{ translateY: sheetY }] }, { backgroundColor: sheet === 'music' ? c.surface : c.bg, maxHeight: height * .91, borderBottomLeftRadius: wide ? 38 : 0, borderBottomRightRadius: wide ? 38 : 0, paddingBottom: Math.max(insets.bottom, 20) }]}>{!wide && <View {...sheetGesture.panHandlers} style={{ paddingTop: 9, paddingBottom: 12 }}><View style={[s.grabber, { backgroundColor: c.muted }]}/></View>}<View {...sheetGesture.panHandlers} style={[s.sheetHeader, { paddingTop: wide ? 22 : 12 }]}><Text style={{ color: c.text, fontSize: 23, fontWeight: '700', letterSpacing: -.5 }}>{sheet === 'duration' ? '番茄钟设置' : sheet ? titles[sheet] : ''}</Text></View><ScrollView onScroll={e => { sheetScrollY.current = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 6, paddingBottom: 20 }}>{renderSheet()}</ScrollView></Animated.View></View>}
+    {(!!dialog || !!ws.conflict) && <View style={[StyleSheet.absoluteFill, s.dialogLayer, { backgroundColor: c.overlay }]}><View accessibilityViewIsModal style={[s.dialog, { backgroundColor: c.surface }]}><Text style={{ color: c.text, fontSize: 19, fontWeight: '600', textAlign: 'center' }}>{ws.conflict ? '发现两份计时状态' : dialog?.title}</Text><Text style={{ color: c.secondary, fontSize: 16, lineHeight: 24, textAlign: 'center', marginTop: 14, marginBottom: 24 }}>{ws.conflict ? '另一台设备也修改了计时或设置。请选择要继续使用的状态；双方已保存的记录会合并，本机状态会另存恢复备份。' : dialog?.body}</Text>{ws.conflict ? <><Button label="使用云端计时与设置" onPress={() => ws.resolve('remote')}/><View style={{ height: 10 }}/><Button label="保留本机计时与设置" secondary onPress={() => ws.resolve('local')}/></> : <>{dialog?.action && <><Button label={dialog.action} danger={dialog.danger} onPress={() => { const fn = dialog.onConfirm; setDialog(null); fn?.(); }}/><View style={{ height: 8 }}/></>}{dialog?.discard && elapsed(timer, now) <= 300 && <><Button label="结束但不保存" danger onPress={() => { const fn = dialog.discard; setDialog(null); fn?.(); }}/><View style={{ height: 8 }}/></>}<Button label={dialog?.action ? '取消' : '知道了'} secondary onPress={() => setDialog(null)}/></>}</View></View>}{!!toast && <View pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 60, alignSelf: 'center', backgroundColor: c.surface, paddingHorizontal: 20, paddingVertical: 12, ...iosCorners(20), zIndex: 10 }}><Text style={{ color: c.text }}>{toast}</Text></View>}</View></MenuHost></Modal>
   </View></Theme.Provider></LanguageContext.Provider>;
 }
 const s = StyleSheet.create({

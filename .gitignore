@@ -52,3 +52,9 @@ playwright-report/
 *.apk
 *.aab
 assets/audio/*.wav
+
+# User-provided music stays outside the public source repository
+/assets/audio/annie.mp3
+/assets/audio/fresh-air.mp3
+/assets/audio/no-worries.mp3
+/assets/audio/ocean-waves.mp3

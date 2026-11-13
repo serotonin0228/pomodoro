@@ -31,6 +31,6 @@ class FocusModule(private val ctx: ReactApplicationContext) : ReactContextBaseJa
   @ReactMethod fun drain(promise: Promise) { synchronized(FocusService::class.java) { val prefs = ctx.getSharedPreferences("focus-actions",0); val actions = prefs.getString("queue","[]"); prefs.edit().remove("queue").commit(); promise.resolve(actions) } }
 }
 class FocusPackage : ReactPackage {
-  override fun createNativeModules(ctx: ReactApplicationContext): List<NativeModule> = listOf(FocusModule(ctx))
+  override fun createNativeModules(ctx: ReactApplicationContext): List<NativeModule> = listOf(FocusModule(ctx), FocusGuardModule(ctx))
   override fun createViewManagers(ctx: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()
 }

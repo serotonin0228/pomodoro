@@ -7,6 +7,15 @@ import { sessionStorage } from './sessionStorage';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+export async function musicDownloadRequest(trackId: string, revision: number) {
+  if (!cloud || !url || !key) throw new Error('Cloud unavailable');
+  const { data, error } = await cloud.auth.getSession();
+  if (error || !data.session) throw new Error('Login required');
+  return {
+    url: `${url}/rest/v1/rpc/download_music?track_id=${encodeURIComponent(trackId)}&revision=${revision}`,
+    headers: { apikey: key, Authorization: `Bearer ${data.session.access_token}`, Accept: 'audio/mpeg' },
+  };
+}
 export const cloud = url && key ? createClient(url, key, { auth: { storage: sessionStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: Platform.OS === 'web' } }) : null;
 export type CloudRow = { user_id: string; revision: number; payload: State; writer: string; updated_at: string };
 let lastClockCheck = 0;

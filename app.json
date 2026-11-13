@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pomodoro",
     "slug": "pomodoro",
-    "version": "1.0.5",
+    "version": "1.2.7",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -21,7 +21,7 @@
       "permissions": [
         "POST_NOTIFICATIONS"
       ],
-      "versionCode": 6
+      "versionCode": 19
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -5,6 +5,7 @@ import { Session } from '@supabase/supabase-js';
 import { cloud, CloudRow, fetchCloud, saveCloud } from './cloud';
 import { defaults, finishState, initialState, mergeRecords, pauseState, State, uid } from './model';
 import { setTimeCorrection } from './time';
+import { replayStartupChanges } from './startup';
 
 export function useWorkspace() {
   const [state, setState] = useState<State>(() => initialState(''));
@@ -17,6 +18,7 @@ export function useWorkspace() {
   const [storageError, setStorageError] = useState('');
   const current = useRef(state), revision = useRef(0), dirty = useRef(false), busy = useRef(false), account = useRef<string | null>(null), storageKey = useRef('pomodoro.guest.v1'), seq = useRef(0), loading = useRef(true), conflictRef = useRef<CloudRow | null>(null);
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingStartup = useRef<Array<(s: State) => State>>([]);
   const persist = useCallback((s: State, pending: boolean) => {
     // Capture the account and revision when queued; later switches cannot redirect a write.
     const key = storageKey.current;
@@ -59,6 +61,7 @@ export function useWorkspace() {
   const update = useCallback((fn: (s: State) => State) => {
     const next = fn(current.current);
     const s = { ...next, updatedAt: Date.now() };
+    if (loading.current) { pendingStartup.current.push(fn); current.current = s; setState(s); return; }
     accept(s, true);
     if (cloud && account.current) setStatus(conflictRef.current ? '有待处理的同步冲突' : '等待同步');
   }, [accept]);
@@ -79,7 +82,10 @@ export function useWorkspace() {
       revision.current = 0; dirty.current = false; conflictRef.current = null; setConflict(null);
       if (raw) { try { const saved = JSON.parse(raw); if (saved.state?.timer && Array.isArray(saved.state.records)) { local = { ...saved.state, settings: { ...defaults, ...saved.state.settings } }; revision.current = saved.revision || 0; dirty.current = !!saved.pending; } } catch { setStorageError('本机数据无法读取，已启动新会话。'); } }
       if (!live) return;
+      const pending = pendingStartup.current.splice(0);
+      local = replayStartupChanges(local, pending, id);
       current.current = local; setState(local); setReady(true); loading.current = false;
+      if (pending.length) accept({ ...local, updatedAt: Date.now() }, true);
       setStatus(s ? '正在连接' : '仅保存在本机');
       if (s) { try { await pull(s); if (!dirty.current && !conflictRef.current && revision.current === 0) setStatus('等待同步'); } catch { setStatus('连接失败 · 等待同步'); } }
     };
@@ -122,5 +128,6 @@ export function useWorkspace() {
     setStatus('等待同步');
   }, [accept]);
   const takeover = useCallback(() => update(s => ({ ...s, timer: { ...s.timer, device } })), [device, update]);
-  return { state, ready, device, session, status, lastSyncedAt, conflict, storageError, update, resolve, takeover, retry: async () => { if (session) { await pull(session); await push(); } } };
+  const readState = useCallback(() => current.current, []);
+  return { state, ready, device, session, status, lastSyncedAt, conflict, storageError, update, resolve, takeover, readState, retry: async () => { if (session) { await pull(session); await push(); } } };
 }

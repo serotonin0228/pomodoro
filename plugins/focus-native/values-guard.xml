@@ -1,0 +1,4 @@
+<resources>
+  <string name="focus_guard_label">番茄钟 · 应用限制</string>
+  <string name="focus_guard_description">仅在专注计时中识别前台应用名称，打开受限应用时返回番茄钟。不读取屏幕文字、不上传应用名单。电话、桌面及系统设置始终可用，可随时在番茄钟关闭限制或在此关闭服务。</string>
+</resources>

@@ -1,0 +1,4 @@
+<resources>
+  <string name="focus_guard_label">Pomodoro · App limits</string>
+  <string name="focus_guard_description">During focus sessions, detects foreground app packages and returns you to Pomodoro when a restricted app opens. Does not read screen text or upload app lists. Phone, launcher and system settings remain available. Turn off limits in Pomodoro or disable this service here at any time.</string>
+</resources>

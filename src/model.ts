@@ -10,7 +10,7 @@ export type Segment = { start: number; end: number };
 export type Settings = {
   focusMinutes: number; breakMinutes: number; longBreakMinutes: number; rounds: number;
   dailyGoal: number; goalType: 'dailyMinutes' | 'dailySessions' | 'weeklyMinutes' | 'none'; dailySessions: number; weeklyMinutes: number; streakMinutes: number; theme: 'system' | 'light' | 'dark'; notifications: boolean;
-  autoBreak: boolean; autoFocus: boolean; sound: boolean; musicDuringBreak: boolean; musicEnabled: boolean; musicTrack: number; musicMode: 'single' | 'sequence' | 'shuffle';
+  autoBreak: boolean; autoFocus: boolean; sound: boolean; musicDuringBreak: boolean; musicEnabled: boolean; musicTrack: number; musicTrackId?: string; musicMode: 'single' | 'sequence' | 'shuffle';
 };
 export type State = { timer: Timer; records: FocusRecord[]; settings: Settings; segments: Segment[]; round: number; updatedAt: number };
 export const defaults: Settings = { focusMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, rounds: 4, dailyGoal: 120, goalType: 'dailyMinutes', dailySessions: 4, weeklyMinutes: 600, streakMinutes: 1, theme: 'system', notifications: true, autoBreak: false, autoFocus: false, sound: true, musicDuringBreak: false, musicEnabled: true, musicTrack: 0, musicMode: 'single' };

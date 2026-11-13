@@ -2,6 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 
 async function openAccount(page: Page) {
   await page.goto('/');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '云同步', exact: true }).click();
   if (await page.getByText('同步服务尚未配置', { exact: true }).isVisible()) test.skip(true, '需要在 Web 构建中配置 Supabase 公开密钥');
   await expect(page.getByRole('textbox', { name: '邮箱地址' })).toBeVisible();
@@ -25,6 +26,7 @@ test('password login masks credentials, reports errors in Chinese, and clears th
   await expect(page.getByRole('alert')).toHaveText('邮箱或密码不正确');
   expect(request).toMatchObject({ email: 'test@example.invalid', password: 'Example-pass9' });
   await page.getByLabel('关闭面板', { exact: true }).click({ position: { x: 4, y: 4 } });
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '云同步', exact: true }).click();
   await expect(page.getByLabel('密码', { exact: true })).toHaveValue('');
 });

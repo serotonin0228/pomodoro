@@ -41,10 +41,10 @@ export function Row({ label, value, onPress, icon, last = false, children, dange
   return onPress ? <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [rowStyle, { opacity: pressed ? .65 : 1 }]}>{content}</Pressable> : <View style={rowStyle}>{content}</View>;
 }
 export function Toggle({ label, value, onChange, last = false }: { label: string; value: boolean; onChange: (v: boolean) => void; last?: boolean }) {
-  const { isDark, reduceMotion } = useTheme();
+  const { c, isDark, reduceMotion } = useTheme();
   const [position] = useState(() => new Animated.Value(value ? 20 : 0));
   useEffect(() => { Animated.spring(position, { toValue: value ? 20 : 0, damping: 22, stiffness: 350, useNativeDriver: true, ...(reduceMotion ? { overshootClamping: true, stiffness: 1000 } : {}) }).start(); }, [position, value, reduceMotion]);
-  return <Row label={label} last={last}><Pressable accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: value }} aria-checked={value} onPress={() => onChange(!value)} hitSlop={6} style={{ minWidth: 51, minHeight: 44, justifyContent: 'center' }}><View style={{ width: 51, height: 31, borderRadius: 16, backgroundColor: value ? '#34C759' : isDark ? '#39393D' : '#E5E5EA' }}><Animated.View style={{ position: 'absolute', left: 2, top: 2, width: 27, height: 27, borderRadius: 14, backgroundColor: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.18)', transform: [{ translateX: position }] }}/></View></Pressable></Row>;
+  return <Row label={label} last={last}><Pressable accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: value }} aria-checked={value} onPress={() => onChange(!value)} hitSlop={6} style={{ minWidth: 51, minHeight: 44, justifyContent: 'center' }}><View style={{ width: 51, height: 31, borderRadius: 16, backgroundColor: value ? c.blue : isDark ? '#39393D' : '#E5E5EA' }}><Animated.View style={{ position: 'absolute', left: 2, top: 2, width: 27, height: 27, borderRadius: 14, backgroundColor: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.18)', transform: [{ translateX: position }] }}/></View></Pressable></Row>;
 }
 export function Stepper({ label, value, unit = '分钟', onChange, min = 1, max = 180, step = 1, last = false }: { label: string; value: number; unit?: string; onChange: (v: number) => void; min?: number; max?: number; step?: number; last?: boolean }) {
   const { c } = useTheme();

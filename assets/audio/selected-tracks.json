@@ -1,0 +1,27 @@
+{
+  "source": "User-supplied MP3 files from the user's Google Drive music folder",
+  "usage": "Personal APK build; these recordings are not covered by the source code MIT license or the prior CC0 music manifest",
+  "tracks": [
+    {
+      "file": "annie.mp3",
+      "title": "小狗安妮",
+      "artist": "沐灵仙 & 森水垚"
+    },
+    {
+      "file": "fresh-air.mp3",
+      "title": "Fresh Air",
+      "artist": "Dan Gibson’s Solitudes"
+    },
+    {
+      "file": "no-worries.mp3",
+      "title": "No Worries",
+      "artist": "Peder B. Helland"
+    },
+    {
+      "file": "ocean-waves.mp3",
+      "title": "礁石海浪",
+      "artist": "末小皮"
+    }
+  ],
+  "processing": "MP3 128 kbps, 44.1 kHz, stereo; full track duration preserved"
+}

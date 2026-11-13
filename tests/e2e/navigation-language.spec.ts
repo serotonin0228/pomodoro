@@ -14,7 +14,8 @@ test('contextual controls, persistent English, and timer-safe preferences', asyn
     await page.waitForTimeout(600);
   };
   await expect(page.getByRole('button', { name: '打开设置', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '调整计时时长', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('button', { name: '番茄钟设置', exact: true }).click();
   await expect(page.getByRole('switch', { name: '专注计时通知', exact: true })).toBeVisible();
   await expect(page.getByText('实时通知与胶囊', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '增加短休息', exact: true }).click();
@@ -32,10 +33,11 @@ test('contextual controls, persistent English, and timer-safe preferences', asyn
   expect((await state()).settings.dailyGoal).toBe(135);
   expect((await state()).timer.id).toBe(id);
   await dismiss('zh');
-  await page.getByRole('button', { name: '云同步', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '语言：简体中文', exact: true }).click();
   await page.getByRole('menuitem', { name: 'English', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Language: English', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cloud sync', exact: true }).click();
   await page.getByRole('tab', { name: 'Sign up', exact: true }).click();
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByText('Enter a valid email address', { exact: true })).toBeVisible();
@@ -62,8 +64,9 @@ test('contextual controls, persistent English, and timer-safe preferences', asyn
   await page.getByRole('button', { name: 'Start focus', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   const runningId = (await state()).timer.id;
-  await page.getByRole('button', { name: 'Timer options', exact: true }).click();
-  await expect(page.getByLabel('Focus minutes', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Timer settings', exact: true }).click();
+  await expect(page.getByLabel('Focus minutes', { exact: true })).toBeVisible();
   await dismiss('en');
   expect((await state()).timer.id).toBe(runningId);
   expect((await state()).timer.status).toBe('running');
@@ -78,7 +81,7 @@ test('contextual controls, persistent English, and timer-safe preferences', asyn
   await expect(page.getByTestId('timer-digits')).toHaveText('43:00');
   await expect(page.getByRole('button', { name: 'Switch to light mode', exact: true })).toBeVisible();
   await noChinese();
-  await page.getByRole('button', { name: 'Cloud sync', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Language: English', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Simplified Chinese', exact: true }).click();
   await expect(page.getByRole('button', { name: '语言：简体中文', exact: true })).toBeVisible();
