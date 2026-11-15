@@ -15,6 +15,13 @@
   <a href="LICENSE">MIT license</a>
 </p>
 
+
+## Android 原生重写版（Kotlin + Compose + Miuix）
+
+本项目的原生重写版位于 [`android/`](android/README.md)：Kotlin + Jetpack Compose + Miuix 组件，功能与现有 React Native 版对齐（计时、统计与 CSV、背景音乐与后台播控、通知与前台服务、应用限制、云同步、中英文）。原 RN 代码保持不变，可对照阅读。
+
+> 构建需要 JDK 17 + Android SDK 36，详见 [`android/README.md`](android/README.md)。
+
 ---
 
 Pomodoro is a cross-platform focus timer built with **React Native**, **Expo**, and **TypeScript**. It combines configurable focus sessions, a distraction-free interface, activity insights, and optional cloud synchronization. The timer and local history work without an account.
