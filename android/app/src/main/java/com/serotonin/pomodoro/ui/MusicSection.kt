@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,8 +21,12 @@ import androidx.compose.ui.unit.dp
 import com.serotonin.pomodoro.BuildConfig
 import com.serotonin.pomodoro.data.CloudClient
 import com.serotonin.pomodoro.data.MusicClient
-import com.serotonin.pomodoro.data.MusicPlayer
+import com.serotonin.pomodoro.data.MusicCoordinator
+import com.serotonin.pomodoro.data.MusicQueue
+import com.serotonin.pomodoro.data.MusicRepository
 import com.serotonin.pomodoro.data.MusicTrack
+import com.serotonin.pomodoro.domain.MusicMode
+import com.serotonin.pomodoro.service.MusicService
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -32,10 +37,11 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * Background music: two switches plus the user's cloud catalogue.
+ * Background music panel.
  *
- * Tracks come from the same Supabase project as sync; picking one downloads the current audio
- * revision once and then plays from the local cache.
+ * "Refresh" downloads the whole catalogue once and stores the prepared queue, so starting a focus
+ * session needs no network. Playback itself lives in [MusicService], which owns the media session
+ * and the lock-screen controls; this panel only prepares the queue and reports status.
  */
 @Composable
 fun MusicSection(controller: WorkspaceController) {
@@ -44,51 +50,92 @@ fun MusicSection(controller: WorkspaceController) {
     val scope = rememberCoroutineScope()
     val settings = controller.state.settings
     val client = remember { MusicClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY) }
+
     var tracks by remember { mutableStateOf<List<MusicTrack>>(emptyList()) }
     var status by remember { mutableStateOf("") }
-    var playing by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var prepared by remember { mutableStateOf(MusicRepository.loadQueue(context) != null) }
+
+    fun prepareQueue(list: List<MusicTrack>, session: CloudClient.Session, onDone: () -> Unit) {
+        if (list.isEmpty()) {
+            status = text.noTracks
+            return
+        }
+        busy = true
+        scope.launch {
+            val order = MusicQueue.order(list.size, settings.musicMode)
+            val paths = ArrayList<String>()
+            val titles = ArrayList<String>()
+            val ids = ArrayList<String>()
+            var failed = 0
+            order.forEachIndexed { position, trackIndex ->
+                val track = list[trackIndex]
+                status = "${position + 1}/${order.size}"
+                val file = runCatching { client.download(context, session, track) }.getOrNull()
+                if (file == null) {
+                    failed++
+                } else {
+                    paths.add(file.absolutePath)
+                    titles.add(track.title)
+                    ids.add(track.id)
+                }
+            }
+            if (paths.isNotEmpty()) {
+                MusicRepository.saveQueue(
+                    context,
+                    MusicRepository.Queue(paths.toList(), titles.toList(), ids.toList()),
+                )
+                prepared = true
+            }
+            status = if (failed > 0) text.downloadFailed else "${paths.size}"
+            busy = false
+            onDone()
+        }
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Text(text.sectionMusic, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text.musicEnabled)
-            Switch(
-                checked = settings.musicEnabled,
-                onCheckedChange = { value -> controller.updateSettings { it.copy(musicEnabled = value) } },
-            )
+
+        SwitchRow(text.musicEnabled, settings.musicEnabled) { value ->
+            controller.updateSettings { it.copy(musicEnabled = value) }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text.musicDuringBreak)
-            Switch(
-                checked = settings.musicDuringBreak,
-                onCheckedChange = { value -> controller.updateSettings { it.copy(musicDuringBreak = value) } },
-            )
+        SwitchRow(text.musicDuringBreak, settings.musicDuringBreak) { value ->
+            controller.updateSettings { it.copy(musicDuringBreak = value) }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MusicMode.entries.forEach { mode ->
+                TextButton(
+                    text = when (mode) {
+                        MusicMode.SINGLE -> text.modeSingle
+                        MusicMode.SEQUENCE -> text.modeSequence
+                        MusicMode.SHUFFLE -> text.modeShuffle
+                    },
+                    onClick = { controller.updateSettings { it.copy(musicMode = mode) } },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
         TextButton(
-            text = "刷新曲库",
+            text = text.musicRefresh,
             onClick = {
                 val session = loadCloudSession(context) ?: run {
                     status = text.syncLocalOnly
                     return@TextButton
                 }
+                busy = true
                 scope.launch {
-                    status = "…"
                     tracks = runCatching { client.tracks(session) }.getOrElse { emptyList() }
-                    status = if (tracks.isEmpty()) text.noTracks else "${tracks.size}"
+                    busy = false
+                    prepareQueue(tracks, session) {}
                 }
             },
             modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
         )
 
         if (status.isNotBlank()) {
@@ -96,44 +143,71 @@ fun MusicSection(controller: WorkspaceController) {
         }
 
         tracks.forEach { track ->
+            val selected = track.id == settings.musicTrackId
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(track.title)
+                    Text(if (selected) "● ${track.title}" else track.title)
                     if (track.artist.isNotBlank()) {
                         Text(track.artist, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                     }
                 }
                 TextButton(
-                    text = if (playing) "停" else "播放",
+                    text = if (selected) text.play else text.play,
                     onClick = {
+                        controller.updateSettings { it.copy(musicTrackId = track.id) }
                         val session = loadCloudSession(context) ?: return@TextButton
-                        if (playing) {
-                            MusicPlayer.stop()
-                            playing = false
-                            return@TextButton
-                        }
-                        scope.launch {
-                            val file = runCatching { client.download(context, session, track) }.getOrNull()
-                            if (file == null) {
-                                status = text.downloadFailed
-                            } else {
-                                MusicPlayer.play(file) { status = text.downloadFailed }
-                                playing = true
-                                controller.updateSettings { it.copy(musicTrackId = track.id) }
-                            }
+                        if (!prepared) {
+                            prepareQueue(tracks, session) {}
+                        } else {
+                            val queue = MusicRepository.loadQueue(context) ?: return@TextButton
+                            MusicService.play(
+                                context,
+                                queue.paths,
+                                queue.titles,
+                                MusicRepository.startIndex(queue, track.id),
+                            )
                         }
                     },
+                    enabled = !busy,
                 )
             }
+        }
+
+        if (prepared) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(
+                text = text.stop,
+                onClick = {
+                    MusicCoordinator.stop(context)
+                    MusicRepository.saveQueue(context, MusicRepository.Queue(emptyList(), emptyList(), emptyList()))
+                    prepared = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
 
-/** The music section shares the sign-in state written by [CloudSection]. */
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label)
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
 private fun loadCloudSession(context: Context): CloudClient.Session? {
     val prefs = context.getSharedPreferences("cloud", Context.MODE_PRIVATE)
     val raw = prefs.getString("session", null) ?: return null

@@ -1,7 +1,6 @@
 package com.serotonin.pomodoro.data
 
 import android.content.Context
-import android.media.MediaPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -92,47 +91,4 @@ class MusicClient(
             connection.disconnect()
         }
     }
-}
-
-/**
- * One player for the whole app, so switching screens never restarts playback.
- *
- * Playback is deliberately simple: a single local file at a time, looping, released when asked.
- */
-object MusicPlayer {
-    private var player: MediaPlayer? = null
-
-    @Synchronized
-    fun play(file: File, onFailure: () -> Unit = {}) {
-        stop()
-        runCatching {
-            player = MediaPlayer().apply {
-                setDataSource(file.absolutePath)
-                isLooping = true
-                setOnErrorListener { _, _, _ ->
-                    onFailure()
-                    true
-                }
-                prepare()
-                start()
-            }
-        }.onFailure {
-            player = null
-            onFailure()
-        }
-    }
-
-    @Synchronized
-    fun stop() {
-        runCatching {
-            player?.let {
-                if (it.isPlaying) it.stop()
-                it.release()
-            }
-        }
-        player = null
-    }
-
-    @Synchronized
-    fun isPlaying(): Boolean = runCatching { player?.isPlaying == true }.getOrDefault(false)
 }

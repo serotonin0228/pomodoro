@@ -19,6 +19,7 @@ import com.serotonin.pomodoro.domain.mergeRecords
 import com.serotonin.pomodoro.domain.newTimer
 import com.serotonin.pomodoro.domain.pauseState
 import com.serotonin.pomodoro.domain.remaining
+import com.serotonin.pomodoro.data.MusicCoordinator
 import com.serotonin.pomodoro.focus.FocusGuardStore
 import com.serotonin.pomodoro.service.Reminders
 import com.serotonin.pomodoro.service.TimerService
@@ -241,6 +242,7 @@ class WorkspaceController(context: Context) {
                 remaining(timer, Clock.now()) * 1000,
             )
         }
+        runCatching { MusicCoordinator.sync(appContext, next) }
         if (timer.status == TimerStatus.RUNNING || timer.status == TimerStatus.PAUSED) {
             runCatching { TimerService.start(appContext) }
         } else {

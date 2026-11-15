@@ -69,7 +69,7 @@ fun CloudSection(controller: WorkspaceController) {
         if (!client.configured) {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "未配置 SUPABASE_URL / SUPABASE_ANON_KEY",
+                text = text.notConfigured,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
             return@Card
@@ -100,7 +100,7 @@ fun CloudSection(controller: WorkspaceController) {
                         run {
                             val next = client.signUp(email.text.toString().trim(), password.text.toString())
                             if (next == null) {
-                                "确认邮件已发送"
+                                text.confirmEmail
                             } else {
                                 saveSession(prefs, next)
                                 session = next
@@ -117,7 +117,7 @@ fun CloudSection(controller: WorkspaceController) {
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(
-                text = "上传",
+                text = text.upload,
                 onClick = {
                     val current = session ?: return@TextButton
                     run {
@@ -143,7 +143,7 @@ fun CloudSection(controller: WorkspaceController) {
                 modifier = Modifier.weight(1f),
             )
             TextButton(
-                text = "下载",
+                text = text.download,
                 onClick = {
                     val current = session ?: return@TextButton
                     run {

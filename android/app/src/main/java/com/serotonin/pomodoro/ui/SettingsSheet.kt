@@ -52,21 +52,21 @@ fun SettingsSheet(
                 SliderRow(
                     label = text.focusLength,
                     value = settings.focusMinutes.toFloat(),
-                    unit = text.minutes(1),
+                    unit = text.unitMinutes,
                     range = 5f..90f,
                     steps = 16,
                 ) { controller.updateSettings { s -> s.copy(focusMinutes = it) } }
                 SliderRow(
                     label = text.shortBreak,
                     value = settings.breakMinutes.toFloat(),
-                    unit = text.minutes(1),
+                    unit = text.unitMinutes,
                     range = 1f..30f,
                     steps = 28,
                 ) { controller.updateSettings { s -> s.copy(breakMinutes = it) } }
                 SliderRow(
                     label = text.longBreak,
                     value = settings.longBreakMinutes.toFloat(),
-                    unit = text.minutes(1),
+                    unit = text.unitMinutes,
                     range = 5f..60f,
                     steps = 10,
                 ) { controller.updateSettings { s -> s.copy(longBreakMinutes = it) } }
@@ -108,6 +108,33 @@ fun SettingsSheet(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                }
+                when (settings.goalType) {
+                    GoalType.DAILY_MINUTES -> SliderRow(
+                        label = text.goalDailyMinutes,
+                        value = settings.dailyGoal.toFloat(),
+                        unit = text.unitMinutes,
+                        range = 15f..480f,
+                        steps = 31,
+                    ) { controller.updateSettings { s -> s.copy(dailyGoal = it) } }
+
+                    GoalType.DAILY_SESSIONS -> SliderRow(
+                        label = text.goalDailySessions,
+                        value = settings.dailySessions.toFloat(),
+                        unit = "",
+                        range = 1f..12f,
+                        steps = 10,
+                    ) { controller.updateSettings { s -> s.copy(dailySessions = it) } }
+
+                    GoalType.WEEKLY_MINUTES -> SliderRow(
+                        label = text.goalWeeklyMinutes,
+                        value = settings.weeklyMinutes.toFloat(),
+                        unit = text.unitMinutes,
+                        range = 60f..3000f,
+                        steps = 48,
+                    ) { controller.updateSettings { s -> s.copy(weeklyMinutes = it) } }
+
+                    GoalType.NONE -> Unit
                 }
             }
 

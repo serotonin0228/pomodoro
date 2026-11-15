@@ -41,6 +41,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private enum class StatsRange { DAY, WEEK, MONTH }
 
+private enum class HistoryFilter { ALL, COUNTDOWN, STOPWATCH }
+
 /**
  * Statistics: range totals, goal progress, per-day breakdown, recent sessions and CSV export.
  *
@@ -56,6 +58,7 @@ fun StatsScreen(
     val state = controller.state
     val context = LocalContext.current
     var range by remember { mutableStateOf(StatsRange.DAY) }
+    var filter by remember { mutableStateOf(HistoryFilter.ALL) }
 
     val exporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
@@ -75,7 +78,16 @@ fun StatsScreen(
     val totals = remember(state.records, range) { dailyTotals(state.records) }
     val rangeMinutes = days.sumOf { (totals[dayKey(it.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())] ?: 0L) } / 60
     val goal = rangeGoal(state.settings, days, totals, state.records, now)
-    val live = state.records.filter { !it.deleted }.sortedByDescending { it.start }
+    val live = state.records
+        .filter { !it.deleted }
+        .filter {
+            when (filter) {
+                HistoryFilter.ALL -> true
+                HistoryFilter.COUNTDOWN -> it.mode == com.serotonin.pomodoro.domain.Mode.COUNTDOWN
+                HistoryFilter.STOPWATCH -> it.mode == com.serotonin.pomodoro.domain.Mode.STOPWATCH
+            }
+        }
+        .sortedByDescending { it.start }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -159,6 +171,21 @@ fun StatsScreen(
             }
         }
 
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HistoryFilter.entries.forEach { option ->
+                    TextButton(
+                        text = when (option) {
+                            HistoryFilter.ALL -> text.filterAll
+                            HistoryFilter.COUNTDOWN -> text.filterCountdown
+                            HistoryFilter.STOPWATCH -> text.filterStopwatch
+                        },
+                        onClick = { filter = option },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
         item {
             Text(
                 text = text.recent,

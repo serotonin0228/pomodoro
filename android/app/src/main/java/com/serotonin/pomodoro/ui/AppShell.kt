@@ -41,6 +41,7 @@ fun AppShell(controller: WorkspaceController) {
     var now by remember { mutableLongStateOf(Clock.now()) }
     var showSettings by remember { mutableStateOf(false) }
 
+    val text = LocalUiText.current
     val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -48,6 +49,7 @@ fun AppShell(controller: WorkspaceController) {
 
     LaunchedEffect(Unit) {
         controller.ensureSystemState()
+        if (controller.isActive) controller.toast = LocalUiText.current.restored
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
@@ -64,7 +66,6 @@ fun AppShell(controller: WorkspaceController) {
         }
     }
 
-    val text = LocalUiText.current
     val phase = if (controller.state.timer.phase == Phase.FOCUS) text.focus else text.rest
     val subtitle = controller.toast
         ?: if (controller.isRunning) "$phase · ${text.round(controller.state.round + 1)}" else phase
