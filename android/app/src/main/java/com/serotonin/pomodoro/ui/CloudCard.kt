@@ -18,6 +18,7 @@ import com.serotonin.pomodoro.BuildConfig
 import com.serotonin.pomodoro.data.CloudClient
 import com.serotonin.pomodoro.domain.Clock
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
+import com.serotonin.pomodoro.ui.theme.Dimens
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.Card
@@ -70,7 +71,7 @@ fun CloudCard(controller: WorkspaceController) {
                 Icon(
                     imageVector = MiuixIcons.CloudFill,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 12.dp),
+                    modifier = Modifier.padding(end = Dimens.ActionIconGap),
                     tint = colorScheme.onBackground,
                 )
             },

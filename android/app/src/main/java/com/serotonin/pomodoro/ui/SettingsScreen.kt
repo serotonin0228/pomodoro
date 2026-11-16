@@ -14,6 +14,7 @@ import com.serotonin.pomodoro.domain.GoalType
 import com.serotonin.pomodoro.domain.Language
 import com.serotonin.pomodoro.domain.ThemeMode
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
+import com.serotonin.pomodoro.ui.theme.Dimens
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -46,13 +47,13 @@ fun SettingsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = Dimens.Gutter)
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = PaddingValues(
             top = padding.calculateTopPadding() + 12.dp,
             bottom = padding.calculateBottomPadding() + 12.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Dimens.CardSpacing),
     ) {
         item {
             Card(modifier = Modifier.fillMaxWidth()) {

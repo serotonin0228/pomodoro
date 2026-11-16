@@ -33,6 +33,7 @@ import com.serotonin.pomodoro.domain.dailyTotals
 import com.serotonin.pomodoro.domain.dayKey
 import com.serotonin.pomodoro.domain.rangeGoal
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
+import com.serotonin.pomodoro.ui.theme.Dimens
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -110,13 +111,13 @@ fun StatsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = Dimens.Gutter)
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = PaddingValues(
             top = padding.calculateTopPadding() + 12.dp,
             bottom = padding.calculateBottomPadding() + 12.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Dimens.CardSpacing),
     ) {
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -151,15 +152,15 @@ fun StatsScreen(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(end = 12.dp, bottom = 8.dp)
-                            .size(96.dp),
+                            .size(Dimens.WatermarkIcon),
                         tint = colorScheme.primary.copy(alpha = 0.12f),
                     )
-                    Column(modifier = Modifier.padding(18.dp)) {
+                    Column(modifier = Modifier.padding(Dimens.CardInner)) {
                         Text(text.totalFocus, fontSize = 14.sp, color = colorScheme.onSurfaceVariantSummary)
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = text.minutes(rangeMinutes),
-                            fontSize = 34.sp,
+                            fontSize = 32.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(2.dp))

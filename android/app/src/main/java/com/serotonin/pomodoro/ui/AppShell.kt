@@ -5,6 +5,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,10 +98,18 @@ fun AppShell(controller: WorkspaceController) {
             }
         },
     ) { padding ->
-        when (controller.tab) {
-            WorkspaceTab.TIMER -> TimerScreen(controller, now, scrollBehavior, padding)
-            WorkspaceTab.STATS -> StatsScreen(controller, now, scrollBehavior, padding)
-            WorkspaceTab.SETTINGS -> SettingsScreen(controller, scrollBehavior, padding)
+        AnimatedContent(
+            targetState = controller.tab,
+            transitionSpec = {
+                fadeIn(tween(220)) togetherWith fadeOut(tween(160))
+            },
+            label = "page",
+        ) { tab ->
+            when (tab) {
+                WorkspaceTab.TIMER -> TimerScreen(controller, now, scrollBehavior, padding)
+                WorkspaceTab.STATS -> StatsScreen(controller, now, scrollBehavior, padding)
+                WorkspaceTab.SETTINGS -> SettingsScreen(controller, scrollBehavior, padding)
+            }
         }
     }
 }

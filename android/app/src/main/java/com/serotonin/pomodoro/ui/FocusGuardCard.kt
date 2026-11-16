@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.serotonin.pomodoro.focus.FocusGuardApps
 import com.serotonin.pomodoro.focus.FocusGuardStore
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
+import com.serotonin.pomodoro.ui.theme.Dimens
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
@@ -31,7 +32,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -63,7 +64,7 @@ fun FocusGuardCard(controller: WorkspaceController) {
                 Icon(
                     imageVector = MiuixIcons.Lock,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 12.dp),
+                    modifier = Modifier.padding(end = Dimens.ActionIconGap),
                     tint = colorScheme.onBackground,
                 )
             },
@@ -93,7 +94,7 @@ fun FocusGuardCard(controller: WorkspaceController) {
         )
     }
 
-    OverlayDialog(
+    WindowDialog(
         show = picking,
         title = text.pickApps,
         onDismissRequest = { picking = false },

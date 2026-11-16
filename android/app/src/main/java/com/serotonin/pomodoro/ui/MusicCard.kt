@@ -24,6 +24,7 @@ import com.serotonin.pomodoro.data.MusicTrack
 import com.serotonin.pomodoro.domain.MusicMode
 import com.serotonin.pomodoro.service.MusicService
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
+import com.serotonin.pomodoro.ui.theme.Dimens
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.Card
@@ -95,7 +96,7 @@ fun MusicCard(controller: WorkspaceController) {
                 Icon(
                     imageVector = MiuixIcons.Music,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 12.dp),
+                    modifier = Modifier.padding(end = Dimens.ActionIconGap),
                     tint = colorScheme.onBackground,
                 )
             },

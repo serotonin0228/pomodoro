@@ -29,6 +29,7 @@ import com.serotonin.pomodoro.domain.clock
 import com.serotonin.pomodoro.domain.displaySeconds
 import com.serotonin.pomodoro.domain.elapsed
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
+import com.serotonin.pomodoro.ui.theme.Dimens
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -36,7 +37,7 @@ import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
@@ -65,13 +66,13 @@ fun TimerScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = Dimens.Gutter)
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = PaddingValues(
             top = padding.calculateTopPadding() + 12.dp,
             bottom = padding.calculateBottomPadding() + 12.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Dimens.CardSpacing),
     ) {
         item {
             Card(
@@ -81,12 +82,12 @@ fun TimerScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 28.dp, horizontal = 20.dp),
+                        .padding(vertical = 28.dp, horizontal = Dimens.CardInner),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
                         text = phaseLabel,
-                        fontSize = 15.sp,
+                        fontSize = Dimens.StatusBody,
                         color = colorScheme.onSurfaceVariantSummary,
                     )
                     Spacer(Modifier.height(6.dp))
@@ -180,7 +181,7 @@ fun TimerScreen(
         }
     }
 
-    OverlayDialog(
+    WindowDialog(
         show = confirmingEnd,
         title = if (timer.phase == Phase.FOCUS) text.endFocusTitle else text.endBreakTitle,
         summary = if (timer.phase == Phase.FOCUS) text.endFocusBody else text.endBreakBody,
