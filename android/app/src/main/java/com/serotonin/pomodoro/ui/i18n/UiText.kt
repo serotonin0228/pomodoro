@@ -104,6 +104,16 @@ data class UiText(
     val filterCountdown: String,
     val filterStopwatch: String,
     val restored: String,
+    val rangeLabel: String,
+    val rangeDay: String,
+    val rangeWeek: String,
+    val rangeMonth: String,
+    val modeLabel: String,
+    val goalLabel: String,
+    val themeLabel: String,
+    val languageLabel: String,
+    val soundLabel: String,
+    val summaryReady: String,
 )
 
 fun uiText(language: Language): UiText = when (language) {
@@ -201,6 +211,16 @@ fun uiText(language: Language): UiText = when (language) {
         filterCountdown = "倒计时",
         filterStopwatch = "正计时",
         restored = "已恢复上次计时",
+        rangeLabel = "统计范围",
+        rangeDay = "今天",
+        rangeWeek = "近 7 天",
+        rangeMonth = "近 30 天",
+        modeLabel = "播放模式",
+        goalLabel = "目标单位",
+        themeLabel = "主题",
+        languageLabel = "语言",
+        soundLabel = "提示音",
+        summaryReady = "准备开始",
     )
 
     Language.EN -> UiText(
@@ -297,6 +317,16 @@ fun uiText(language: Language): UiText = when (language) {
         filterCountdown = "Countdown",
         filterStopwatch = "Stopwatch",
         restored = "Restored the previous session",
+        rangeLabel = "Range",
+        rangeDay = "Today",
+        rangeWeek = "Last 7 days",
+        rangeMonth = "Last 30 days",
+        modeLabel = "Play mode",
+        goalLabel = "Goal unit",
+        themeLabel = "Theme",
+        languageLabel = "Language",
+        soundLabel = "Chime",
+        summaryReady = "Ready",
     )
 }
 

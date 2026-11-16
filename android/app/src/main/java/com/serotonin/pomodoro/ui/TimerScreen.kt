@@ -2,12 +2,14 @@ package com.serotonin.pomodoro.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,22 +31,27 @@ import com.serotonin.pomodoro.domain.elapsed
 import com.serotonin.pomodoro.ui.i18n.LocalUiText
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
 /**
- * Focus screen: one big clock, one primary action, one secondary action.
+ * Focus page.
  *
- * All controls come from Miuix; the screen owns no timer state of its own, it only renders
- * [WorkspaceController.state] against the current wall clock.
+ * One large Miuix card owns the clock, so the most important number is also the biggest element on
+ * screen; actions sit underneath in the same visual rhythm the system apps use.
  */
 @Composable
 fun TimerScreen(
     controller: WorkspaceController,
     now: Long,
+    scrollBehavior: ScrollBehavior,
+    padding: PaddingValues,
 ) {
     val state = controller.state
     val timer = state.timer
@@ -53,85 +62,121 @@ fun TimerScreen(
     val observed = elapsed(timer, now)
     val canDiscard = timer.phase == Phase.FOCUS && observed <= 300
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 12.dp)
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentPadding = PaddingValues(
+            top = padding.calculateTopPadding() + 12.dp,
+            bottom = padding.calculateBottomPadding() + 12.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = phaseLabel,
+        item {
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = clock(displaySeconds(timer, now)),
+                colors = CardDefaults.defaultColors(color = colorScheme.surfaceVariant),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 28.dp, horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = phaseLabel,
+                        fontSize = 15.sp,
+                        color = colorScheme.onSurfaceVariantSummary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = clock(displaySeconds(timer, now)),
+                        fontSize = 76.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = when (timer.status) {
+                            TimerStatus.RUNNING -> "${text.running} · ${text.round(state.round + 1)}"
+                            TimerStatus.PAUSED -> text.paused
+                            TimerStatus.COMPLETED -> text.completed
+                            TimerStatus.IDLE -> if (timer.mode == Mode.COUNTDOWN) text.ready else text.countdownMode
+                        },
+                        fontSize = 15.sp,
+                        color = colorScheme.onSurfaceVariantSummary,
+                    )
+                    if (timer.mode == Mode.COUNTDOWN && timer.duration > 0) {
+                        Spacer(Modifier.height(18.dp))
+                        LinearProgressIndicator(
+                            progress = (observed.toFloat() / timer.duration.toFloat()).coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            Button(
+                onClick = { controller.primary() },
                 modifier = Modifier.fillMaxWidth(),
-                fontSize = 68.sp,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = when (timer.status) {
-                    TimerStatus.RUNNING -> "${text.running} · ${text.round(state.round + 1)}"
-                    TimerStatus.PAUSED -> text.paused
-                    TimerStatus.COMPLETED -> text.completed
-                    TimerStatus.IDLE -> if (timer.mode == Mode.COUNTDOWN) text.ready else text.countdownMode
-                },
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            if (timer.mode == Mode.COUNTDOWN && timer.duration > 0) {
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = (observed.toFloat() / timer.duration.toFloat()).coerceIn(0f, 1f),
-                    modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    when (timer.status) {
+                        TimerStatus.RUNNING -> text.pause
+                        TimerStatus.PAUSED -> text.resume
+                        TimerStatus.COMPLETED -> text.nextPhase
+                        TimerStatus.IDLE -> text.start
+                    },
                 )
             }
         }
 
-        Spacer(Modifier.height(24.dp))
-
-        Button(
-            onClick = { controller.primary() },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                when (timer.status) {
-                    TimerStatus.RUNNING -> text.pause
-                    TimerStatus.PAUSED -> text.resume
-                    TimerStatus.COMPLETED -> text.nextPhase
-                    TimerStatus.IDLE -> text.start
-                },
-            )
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    text = if (timer.mode == Mode.COUNTDOWN) {
+                        text.switchToStopwatch
+                    } else {
+                        text.switchToCountdown
+                    },
+                    onClick = {
+                        controller.changeMode(
+                            if (timer.mode == Mode.COUNTDOWN) Mode.STOPWATCH else Mode.COUNTDOWN,
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    text = text.end,
+                    onClick = { confirmingEnd = true },
+                    modifier = Modifier.weight(1f),
+                    enabled = controller.isActive || controller.isCompleted,
+                )
+            }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            TextButton(
-                text = if (timer.mode == Mode.COUNTDOWN) text.switchToStopwatch else text.switchToCountdown,
-                onClick = {
-                    controller.changeMode(
-                        if (timer.mode == Mode.COUNTDOWN) Mode.STOPWATCH else Mode.COUNTDOWN,
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(text.summaryReady, color = colorScheme.onSurfaceVariantSummary)
+                    Text(
+                        text = if (timer.phase == Phase.FOCUS) {
+                            text.round(state.round + 1)
+                        } else {
+                            text.rest
+                        },
+                        color = MiuixTheme.colorScheme.onSurface,
                     )
-                },
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
-                text = text.end,
-                onClick = { confirmingEnd = true },
-                modifier = Modifier.weight(1f),
-                enabled = controller.isActive || controller.isCompleted,
-            )
+                }
+            }
         }
     }
 

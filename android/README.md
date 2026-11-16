@@ -5,6 +5,10 @@
 原项目是 `serotonin0228/pomodoro`（Expo / React Native + TypeScript），本工程是完整重写，
 不改动原仓库代码，功能一一对齐后用原生实现替换。
 
+## 界面风格
+
+按 `chenaizhang/KernelSU-Style-UI-Kit` 的做法重做：`Scaffold` + 可折叠 `TopAppBar`（`MiuixScrollBehavior`）+ 底部 `NavigationBar` 三页（计时 / 统计 / 设置），内容统一 12dp 横向留白；设置页全部使用 `miuix-preference`（`SwitchPreference` / `SliderPreference` / `ArrowPreference` / `OverlayDropdownPreference`），不再手搓开关与滑块。全工程只用 Miuix，无 Material 控件。
+
 ## 技术选型
 
 | 维度 | 原实现 | 重构后 |

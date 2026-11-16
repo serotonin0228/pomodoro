@@ -3,14 +3,15 @@ package com.serotonin.pomodoro.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -18,44 +19,58 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.serotonin.pomodoro.data.CsvExport
-import com.serotonin.pomodoro.domain.FocusRecord
+import com.serotonin.pomodoro.domain.Mode
 import com.serotonin.pomodoro.domain.clock
 import com.serotonin.pomodoro.domain.dailyTotals
 import com.serotonin.pomodoro.domain.dayKey
 import com.serotonin.pomodoro.domain.rangeGoal
+import com.serotonin.pomodoro.ui.i18n.LocalUiText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import com.serotonin.pomodoro.ui.i18n.LocalUiText
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Timer
+import top.yukonga.miuix.kmp.icon.extended.Weeks
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
 private enum class StatsRange { DAY, WEEK, MONTH }
 
 private enum class HistoryFilter { ALL, COUNTDOWN, STOPWATCH }
 
 /**
- * Statistics: range totals, goal progress, per-day breakdown, recent sessions and CSV export.
+ * Statistics page.
  *
- * The goal maths is the same function the domain tests cover, so the number shown here and the
- * number produced by `rangeGoal` in the test suite can never drift apart.
+ * The headline number sits in a tonal card with a large watermark icon (the pattern used by the
+ * KernelSU kit's status card), and every list row is a Miuix preference so the page reads like a
+ * system statistics screen.
  */
 @Composable
 fun StatsScreen(
     controller: WorkspaceController,
     now: Long,
+    scrollBehavior: ScrollBehavior,
+    padding: PaddingValues,
 ) {
-    val text = LocalUiText.current
     val state = controller.state
+    val text = LocalUiText.current
     val context = LocalContext.current
     var range by remember { mutableStateOf(StatsRange.DAY) }
     var filter by remember { mutableStateOf(HistoryFilter.ALL) }
@@ -65,7 +80,7 @@ fun StatsScreen(
     ) { uri ->
         if (uri != null) {
             CsvExport.writeTo(context, uri, state.records)
-            controller.toast = "已导出 CSV"
+            controller.toast = text.exported
         }
     }
 
@@ -75,43 +90,97 @@ fun StatsScreen(
         StatsRange.WEEK -> (6 downTo 0).map { today.minusDays(it.toLong()) }
         StatsRange.MONTH -> (29 downTo 0).map { today.minusDays(it.toLong()) }
     }
-    val totals = remember(state.records, range) { dailyTotals(state.records) }
-    val rangeMinutes = days.sumOf { (totals[dayKey(it.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())] ?: 0L) } / 60
+    val totals = remember(state.records) { dailyTotals(state.records) }
+    val rangeMinutes = days.sumOf {
+        val key = dayKey(it.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
+        (totals[key] ?: 0L) / 60
+    }
     val goal = rangeGoal(state.settings, days, totals, state.records, now)
     val live = state.records
         .filter { !it.deleted }
         .filter {
             when (filter) {
                 HistoryFilter.ALL -> true
-                HistoryFilter.COUNTDOWN -> it.mode == com.serotonin.pomodoro.domain.Mode.COUNTDOWN
-                HistoryFilter.STOPWATCH -> it.mode == com.serotonin.pomodoro.domain.Mode.STOPWATCH
+                HistoryFilter.COUNTDOWN -> it.mode == Mode.COUNTDOWN
+                HistoryFilter.STOPWATCH -> it.mode == Mode.STOPWATCH
             }
         }
         .sortedByDescending { it.start }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentPadding = PaddingValues(
+            top = padding.calculateTopPadding() + 12.dp,
+            bottom = padding.calculateBottomPadding() + 12.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatsRange.entries.forEach { option ->
-                    val label = when (option) {
-                        StatsRange.DAY -> text.byDay
-                        StatsRange.WEEK -> text.minutes(7)
-                        StatsRange.MONTH -> text.minutes(30)
-                    }
-                    if (option == range) {
-                        Button(onClick = { range = option }, modifier = Modifier.weight(1f)) {
-                            Text(label)
-                        }
-                    } else {
-                        TextButton(
-                            text = label,
-                            onClick = { range = option },
-                            modifier = Modifier.weight(1f),
+            Card(modifier = Modifier.fillMaxWidth()) {
+                OverlayDropdownPreference(
+                    items = listOf(text.rangeDay, text.rangeWeek, text.rangeMonth),
+                    selectedIndex = range.ordinal,
+                    title = text.rangeLabel,
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Weeks,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                            tint = colorScheme.onBackground,
                         )
+                    },
+                    onSelectedIndexChange = { index ->
+                        range = StatsRange.entries.getOrElse(index) { StatsRange.DAY }
+                    },
+                )
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.defaultColors(color = colorScheme.surfaceVariant),
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = MiuixIcons.Timer,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 12.dp, bottom = 8.dp)
+                            .size(96.dp),
+                        tint = colorScheme.primary.copy(alpha = 0.12f),
+                    )
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(text.totalFocus, fontSize = 14.sp, color = colorScheme.onSurfaceVariantSummary)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = text.minutes(rangeMinutes),
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = text.records(live.size),
+                            fontSize = 14.sp,
+                            color = colorScheme.onSurfaceVariantSummary,
+                        )
+                        if (goal != null) {
+                            Spacer(Modifier.height(14.dp))
+                            LinearProgressIndicator(
+                                progress = (goal / 100f).coerceIn(0f, 1f),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = text.goalProgress(goal),
+                                fontSize = 13.sp,
+                                color = colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
                     }
                 }
             }
@@ -119,98 +188,59 @@ fun StatsScreen(
 
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
-                Text(text.totalFocus)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = text.minutes(rangeMinutes),
-                    color = MiuixTheme.colorScheme.primary,
+                OverlayDropdownPreference(
+                    items = listOf(text.filterAll, text.filterCountdown, text.filterStopwatch),
+                    selectedIndex = filter.ordinal,
+                    title = text.recent,
+                    onSelectedIndexChange = { index ->
+                        filter = HistoryFilter.entries.getOrElse(index) { HistoryFilter.ALL }
+                    },
                 )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = text.records(live.size),
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                ArrowPreference(
+                    title = text.exportCsv,
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Download,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                            tint = colorScheme.onBackground,
+                        )
+                    },
+                    onClick = { exporter.launch(CsvExport.fileName(now)) },
+                    enabled = live.isNotEmpty(),
                 )
-                if (goal != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(text.goalProgress(goal))
-                    Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = (goal / 100f).coerceIn(0f, 1f),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
             }
         }
 
-        item {
-            TextButton(
-                text = text.exportCsv,
-                onClick = { exporter.launch(CsvExport.fileName(now)) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = live.isNotEmpty(),
-            )
-        }
-
-        item {
-            Text(
-                text = text.byDay,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        }
         items(days) { day ->
             val key = day.toString()
             val seconds = totals[key] ?: 0L
             Card(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(key)
-                    Text(if (seconds > 0) text.minutes(seconds / 60) else "—")
-                }
+                ArrowPreference(
+                    title = key,
+                    summary = null,
+                    endActions = {
+                        Text(
+                            text = if (seconds > 0) text.minutes(seconds / 60) else "—",
+                            color = colorScheme.onSurfaceVariantSummary,
+                        )
+                    },
+                )
             }
         }
 
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HistoryFilter.entries.forEach { option ->
-                    TextButton(
-                        text = when (option) {
-                            HistoryFilter.ALL -> text.filterAll
-                            HistoryFilter.COUNTDOWN -> text.filterCountdown
-                            HistoryFilter.STOPWATCH -> text.filterStopwatch
-                        },
-                        onClick = { filter = option },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-        item {
-            Text(
-                text = text.recent,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        }
         items(live.take(50)) { record ->
-            RecordRow(record)
-        }
-    }
-}
-
-@Composable
-private fun RecordRow(record: FocusRecord) {
-    val formatter = remember { DateTimeFormatter.ofPattern("MM-dd HH:mm") }
-    val moment = remember(record.start) {
-        Instant.ofEpochMilli(record.start).atZone(ZoneId.systemDefault()).format(formatter)
-    }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(moment)
-            Text(clock(record.seconds))
+            val formatter = remember { DateTimeFormatter.ofPattern("MM-dd HH:mm") }
+            val moment = remember(record.start) {
+                Instant.ofEpochMilli(record.start).atZone(ZoneId.systemDefault()).format(formatter)
+            }
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ArrowPreference(
+                    title = moment,
+                    summary = if (record.mode == Mode.COUNTDOWN) text.filterCountdown else text.filterStopwatch,
+                    endActions = { Text(clock(record.seconds)) },
+                )
+            }
         }
     }
 }

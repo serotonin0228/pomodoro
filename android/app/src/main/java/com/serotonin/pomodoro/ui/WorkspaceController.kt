@@ -24,7 +24,7 @@ import com.serotonin.pomodoro.focus.FocusGuardStore
 import com.serotonin.pomodoro.service.Reminders
 import com.serotonin.pomodoro.service.TimerService
 
-enum class WorkspaceTab { TIMER, STATS }
+enum class WorkspaceTab { TIMER, STATS, SETTINGS }
 
 /**
  * Owns the workspace: loads it once, persists every mutation, and translates the three timer
