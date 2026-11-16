@@ -94,3 +94,23 @@ startAction = {
 KSU 用了 `overScrollVertical()`、`scrollEndHaptic()`、`Modifier.pressFeedbackType`，这些在 **Miuix 0.9.4**
 （本工程锁定的版本）里没有导出；我们改用标准 `LazyColumn` + `overscrollEffect = null` 达到同样的手感，
 等升级到对应版本再补。
+
+## 9. 强调色（MIUI 蓝）
+
+Miuix 默认 `primary`：浅色 `#3482FF`，深色 `#277AF7`。`ThemeController` 不传 `keyColor` 时按原样使用，
+不会二次生成，所以这就是界面上的强调色。
+
+**主动使用点**（缺一即视为走样）：
+
+| 位置 | 用法 |
+|---|---|
+| 计时页 · 运行中的时钟数字 | `colorScheme.primary` |
+| 计时页 · 状态行（计时中） | `colorScheme.primary` |
+| 计时页 · 阶段胶囊 | 底 `tertiaryContainer` `#EAF2FF` + 字 `primary` |
+| 统计页 · 目标百分比 | `colorScheme.primary` |
+| 统计页 · 卡片水印图标 | `primary` 18% alpha |
+
+**组件默认带来的强调色**（不要自己再画一遍）：`Button` 背景、`Switch` 选中态、`Slider` 已选轨道、
+`NavigationBarItem` 选中项、`ArrowPreference` 箭头、`LinearProgressIndicator` 进度色。
+
+只用 `MiuixTheme.colorScheme.primary`，不出现任何 `MaterialTheme` 引用。

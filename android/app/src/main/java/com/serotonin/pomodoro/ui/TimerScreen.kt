@@ -1,5 +1,6 @@
 package com.serotonin.pomodoro.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -87,14 +89,22 @@ fun TimerScreen(
                 ) {
                     Text(
                         text = phaseLabel,
-                        fontSize = Dimens.StatusBody,
-                        color = colorScheme.onSurfaceVariantSummary,
+                        fontSize = 13.sp,
+                        color = colorScheme.primary,
+                        modifier = Modifier
+                            .background(colorScheme.tertiaryContainer, RoundedCornerShape(50))
+                            .padding(horizontal = Dimens.CardSpacing, vertical = 4.dp),
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = clock(displaySeconds(timer, now)),
                         fontSize = 76.sp,
                         fontWeight = FontWeight.Medium,
+                        color = if (timer.status == TimerStatus.RUNNING) {
+                            colorScheme.primary
+                        } else {
+                            colorScheme.onSurface
+                        },
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(4.dp))
@@ -106,7 +116,11 @@ fun TimerScreen(
                             TimerStatus.IDLE -> if (timer.mode == Mode.COUNTDOWN) text.ready else text.countdownMode
                         },
                         fontSize = 15.sp,
-                        color = colorScheme.onSurfaceVariantSummary,
+                        color = if (timer.status == TimerStatus.RUNNING) {
+                            colorScheme.primary
+                        } else {
+                            colorScheme.onSurfaceVariantSummary
+                        },
                     )
                     if (timer.mode == Mode.COUNTDOWN && timer.duration > 0) {
                         Spacer(Modifier.height(18.dp))

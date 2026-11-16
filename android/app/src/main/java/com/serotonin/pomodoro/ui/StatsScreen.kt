@@ -153,7 +153,7 @@ fun StatsScreen(
                             .align(Alignment.BottomEnd)
                             .padding(end = 12.dp, bottom = 8.dp)
                             .size(Dimens.WatermarkIcon),
-                        tint = colorScheme.primary.copy(alpha = 0.12f),
+                        tint = colorScheme.primary.copy(alpha = 0.18f),
                     )
                     Column(modifier = Modifier.padding(Dimens.CardInner)) {
                         Text(text.totalFocus, fontSize = 14.sp, color = colorScheme.onSurfaceVariantSummary)
@@ -179,7 +179,7 @@ fun StatsScreen(
                             Text(
                                 text = text.goalProgress(goal),
                                 fontSize = 13.sp,
-                                color = colorScheme.onSurfaceVariantSummary,
+                                color = colorScheme.primary,
                             )
                         }
                     }
