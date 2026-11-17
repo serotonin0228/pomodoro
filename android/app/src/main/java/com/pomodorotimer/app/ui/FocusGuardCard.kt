@@ -4,7 +4,11 @@ import android.content.Context
 import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -15,8 +19,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.Lifecycle
@@ -29,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -139,6 +146,7 @@ fun FocusGuardCard(controller: WorkspaceController) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PackagePicker(context: Context, mode: String, onClose: () -> Unit) {
     val prefs = remember { FocusGuardStore.prefs(context) }
@@ -158,27 +166,37 @@ private fun PackagePicker(context: Context, mode: String, onClose: () -> Unit) {
     }
 
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val listMaxHeight = (screenHeight * 0.34f).coerceIn(120.dp, 300.dp)
+    val density = LocalDensity.current
+    val keyboardHeight = with(density) { WindowInsets.ime.getBottom(this).toDp() }
+    val rowHeight = 64.dp
+    val available = (screenHeight - keyboardHeight - 390.dp).coerceIn(rowHeight, rowHeight * 4)
+    val visibleRows = (available / rowHeight).toInt().coerceIn(1, 4)
+    val listMaxHeight = rowHeight * visibleRows
+    val listState = rememberLazyListState()
+    LaunchedEffect(query) { listState.scrollToItem(0) }
     Column(modifier = Modifier.fillMaxWidth()) {
         TextField(
             value = query, onValueChange = { query = it },
             label = if (english) "Search apps" else "搜索应用", useLabelAsPlaceholder = true,
             modifier = Modifier.fillMaxWidth(), singleLine = true,
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TextButton(text = if (english) "Select all" else "全选", onClick = { save(AppSelection.selectAll(selected, visibleIds)) }, modifier = Modifier.weight(1f), enabled = visibleIds.isNotEmpty())
             TextButton(text = if (english) "Invert" else "反选", onClick = { save(AppSelection.invert(selected, visibleIds)) }, modifier = Modifier.weight(1f), enabled = visibleIds.isNotEmpty())
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth().heightIn(max = listMaxHeight),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp),
+            flingBehavior = rememberSnapFlingBehavior(lazyListState = listState),
+            contentPadding = PaddingValues(0.dp),
         ) {
             items(visible, key = { it.first }) { app ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 64.dp)
+                        .heightIn(min = rowHeight)
                         .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -200,7 +218,7 @@ private fun PackagePicker(context: Context, mode: String, onClose: () -> Unit) {
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
         TextButton(
             text = LocalUiText.current.done,
             onClick = onClose,

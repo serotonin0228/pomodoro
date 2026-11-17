@@ -12,8 +12,8 @@ android {
         applicationId = "com.pomodorotimer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.0.2"
+        versionCode = 18
+        versionName = "1.0.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
