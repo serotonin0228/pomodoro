@@ -21,6 +21,7 @@ import android.os.IBinder
 import com.pomodorotimer.app.MainActivity
 import com.pomodorotimer.app.R
 import com.pomodorotimer.app.notifications.NotificationChannels
+import com.pomodorotimer.app.data.PlaybackStartPolicy
 import com.pomodorotimer.app.data.MusicQueue
 import com.pomodorotimer.app.data.MusicRepository
 import com.pomodorotimer.app.data.WorkspaceStore
@@ -111,6 +112,23 @@ class MusicService : Service() {
                     orderMode = null
                     startTrack()
                 } else resume()
+            }
+            ACTION_ENSURE_PLAYING -> {
+                when (PlaybackStartPolicy.decide(player != null, playing)) {
+                    PlaybackStartPolicy.Action.KEEP_PLAYING -> Unit
+                    PlaybackStartPolicy.Action.RESUME -> resume()
+                    PlaybackStartPolicy.Action.START_QUEUE -> {
+                        val newPaths = intent.getStringArrayListExtra(EXTRA_PATHS).orEmpty()
+                        val newTitles = intent.getStringArrayListExtra(EXTRA_TITLES).orEmpty()
+                        if (newPaths.isNotEmpty()) {
+                            paths = newPaths
+                            titles = newTitles
+                            index = intent.getIntExtra(EXTRA_START, 0).coerceIn(0, paths.lastIndex)
+                            orderMode = null
+                            startTrack()
+                        } else { stopForegroundCompat(); stopSelf() }
+                    }
+                }
             }
             ACTION_PAUSE -> pause()
             ACTION_RESUME -> resume()
@@ -383,6 +401,7 @@ class MusicService : Service() {
             runningService?.let { service -> service.mainHandler.post { service.refreshNotificationVisibility() } }
         }
         private const val ACTION_PLAY = "com.pomodorotimer.app.music.PLAY"
+        private const val ACTION_ENSURE_PLAYING = "com.pomodorotimer.app.music.ENSURE_PLAYING"
         private const val ACTION_PAUSE = "com.pomodorotimer.app.music.PAUSE"
         private const val ACTION_RESUME = "com.pomodorotimer.app.music.RESUME"
         private const val ACTION_NEXT = "com.pomodorotimer.app.music.NEXT"
@@ -396,6 +415,17 @@ class MusicService : Service() {
             if (paths.isEmpty()) return
             val intent = Intent(context, MusicService::class.java)
                 .setAction(ACTION_PLAY)
+                .putStringArrayListExtra(EXTRA_PATHS, ArrayList(paths))
+                .putStringArrayListExtra(EXTRA_TITLES, ArrayList(titles))
+                .putExtra(EXTRA_START, startIndex)
+            context.startForegroundService(intent)
+        }
+
+        /** Resume an existing player in place; load the queue only when no player exists. */
+        fun ensurePlaying(context: Context, paths: List<String>, titles: List<String>, startIndex: Int) {
+            if (paths.isEmpty()) return
+            val intent = Intent(context, MusicService::class.java)
+                .setAction(ACTION_ENSURE_PLAYING)
                 .putStringArrayListExtra(EXTRA_PATHS, ArrayList(paths))
                 .putStringArrayListExtra(EXTRA_TITLES, ArrayList(titles))
                 .putExtra(EXTRA_START, startIndex)

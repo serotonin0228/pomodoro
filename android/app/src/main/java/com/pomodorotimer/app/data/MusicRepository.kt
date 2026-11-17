@@ -85,7 +85,7 @@ object MusicCoordinator {
 
         if (shouldPlay && !active) {
             val start = MusicRepository.startIndex(queue, state.settings.musicTrackId)
-            MusicService.play(context, queue.paths, queue.titles, start)
+            MusicService.ensurePlaying(context, queue.paths, queue.titles, start)
             active = true
         } else if (!shouldPlay && active) {
             MusicService.pause(context)
