@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,25 @@ fun CloudCard(controller: WorkspaceController) {
     var busy by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var actualEmail by remember(session?.userId) {
+        mutableStateOf(session?.let { accountEmail(it.accessToken) ?: prefs.getString("account_email_${it.userId}", null) })
+    }
+    LaunchedEffect(controller.cloudSyncStatus) {
+        val current = session
+        val latest = if (current != null) loadSession(prefs) else null
+        if (latest != null && latest.userId == current?.userId && latest.accessToken != current.accessToken) session = latest
+    }
+    LaunchedEffect(session?.userId, session?.accessToken) {
+        val current = session ?: return@LaunchedEffect
+        if (actualEmail.isNullOrBlank()) {
+            runCatching { client.accountEmail(current) }.getOrNull()?.let { found ->
+                if (session?.userId == current.userId) {
+                    actualEmail = found
+                    prefs.edit().putString("account_email_${current.userId}", found).apply()
+                }
+            }
+        }
+    }
     val accountTitle = if (controller.state.settings.language == com.pomodorotimer.app.domain.Language.EN) "Account" else "账号"
     val en = controller.state.settings.language == com.pomodorotimer.app.domain.Language.EN
     val syncLabel = when {
@@ -89,7 +109,10 @@ fun CloudCard(controller: WorkspaceController) {
                     message = text.confirmEmail
                 } else {
                     saveSession(prefs, next)
+                    val signedInEmail = accountEmail(next.accessToken) ?: email.trim()
+                    prefs.edit().putString("account_email_${next.userId}", signedInEmail).apply()
                     session = next
+                    actualEmail = signedInEmail
                     password = ""
                     showAccount = false
                     controller.syncCloud()
@@ -106,7 +129,7 @@ fun CloudCard(controller: WorkspaceController) {
 
     Card(modifier = Modifier.fillMaxWidth()) {
         ArrowPreference(
-            title = accountTitle,
+            title = if (session == null) accountTitle else actualEmail ?: if (en) "Signed in" else "已登录",
             summary = summary,
             startAction = { PreferenceIcon(OutlineIcons.Cloud) },
             onClick = { showAccount = true; message = "" },
@@ -141,7 +164,7 @@ fun CloudCard(controller: WorkspaceController) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
-                Text(accountEmail(session!!.accessToken) ?: text.syncOn)
+                Text(actualEmail ?: if (en) "Signed in" else "已登录")
                 if (controller.cloudSyncError) Text(text.syncError, color = colorScheme.onSurfaceVariantSummary)
                 Spacer(Modifier.height(4.dp))
                 TextButton(text = text.signOut, modifier = Modifier.fillMaxWidth(), onClick = {

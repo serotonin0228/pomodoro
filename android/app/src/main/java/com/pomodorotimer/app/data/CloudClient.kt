@@ -34,6 +34,13 @@ class CloudClient(
         if (json.has("access_token")) sessionFrom(json) else null
     }
 
+    /** Fetch the current account identity when older stored sessions lack an email claim. */
+    suspend fun accountEmail(session: Session): String? = withContext(Dispatchers.IO) {
+        val user = JSONObject(request("GET", "/auth/v1/user", null, session.accessToken))
+        if (user.optString("id") != session.userId) return@withContext null
+        user.optString("email").takeIf { it.isNotBlank() }
+    }
+
     suspend fun refresh(session: Session): Session = withContext(Dispatchers.IO) {
         val body = JSONObject().put("refresh_token", session.refreshToken).toString()
         val json = JSONObject(request("POST", "/auth/v1/token?grant_type=refresh_token", body, token = null))
