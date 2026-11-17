@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.serotonin.pomodoro"
-    compileSdk = 36
+    namespace = "com.pomodorotimer.app"
+    compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.serotonin.pomodoro"
+        applicationId = "com.pomodorotimer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "2.0.0"
+        versionCode = 15
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

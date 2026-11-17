@@ -43,7 +43,6 @@ playwright-report/
 
 # generated native folders
 /ios
-/android
 
 # Project-specific configuration and private local captures
 /supabase/project.json

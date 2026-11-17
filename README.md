@@ -18,9 +18,9 @@
 
 ## Android 原生重写版（Kotlin + Compose + Miuix）
 
-本项目的原生重写版位于 [`android/`](android/README.md)：Kotlin + Jetpack Compose + Miuix 组件，功能与现有 React Native 版对齐（计时、统计与 CSV、背景音乐与后台播控、通知与前台服务、应用限制、云同步、中英文）。原 RN 代码保持不变，可对照阅读。
+本项目的原生重写版位于 [`android/`](android/README.md)：Kotlin + Jetpack Compose + Miuix 组件，包含计时、统计与记录管理、背景音乐与后台播控、通知与前台服务、应用限制、云同步及中英文。原 RN 代码保持不变，可对照阅读。
 
-> 构建需要 JDK 17 + Android SDK 36，详见 [`android/README.md`](android/README.md)。
+> 构建需要 JDK 21、Gradle 9.5 与 Android SDK 37，详见 [`android/README.md`](android/README.md)。
 
 ---
 
