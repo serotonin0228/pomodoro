@@ -1,6 +1,7 @@
 package com.pomodorotimer.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
@@ -31,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -55,6 +58,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
@@ -107,6 +111,7 @@ fun TimerScreen(
                         if (timer.mode != mode) controller.changeMode(mode)
                     },
                     modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
+                    indication = LocalIndication.current,
                 )
                 Spacer(Modifier.weight(1f))
                 BoxWithConstraints(modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -155,12 +160,12 @@ fun TimerScreen(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Card(onClick = { showingMusic = true }, modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
-                    Row(modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = OutlineIcons.Music, contentDescription = null, tint = colorScheme.primary)
-                        Text(track ?: text.sectionMusic, modifier = Modifier.weight(1f), color = colorScheme.onSurface, fontSize = 15.sp, maxLines = 1)
-                        Icon(OutlineIcons.Next, contentDescription = null, tint = colorScheme.onSurfaceVariantSummary, modifier = Modifier.size(18.dp))
-                    }
+                Card(modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(CardDefaults.CornerRadius))) {
+                    ArrowPreference(
+                        title = track ?: text.sectionMusic,
+                        startAction = { Icon(imageVector = OutlineIcons.Music, contentDescription = null, tint = colorScheme.primary) },
+                        onClick = { showingMusic = true },
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
             }

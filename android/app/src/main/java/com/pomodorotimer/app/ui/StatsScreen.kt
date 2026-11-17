@@ -1,6 +1,7 @@
 package com.pomodorotimer.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -95,6 +97,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                     listOf(text.rangeDay, text.rangeWeek, text.rangeMonth), period.ordinal,
                     { index -> period = StatisticsPeriod.entries[index]; offset = 0; selected = null },
                     modifier = Modifier.fillMaxWidth(),
+                    indication = LocalIndication.current,
                 )
             }
             item {
@@ -188,7 +191,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                                             val date = month.withDayOfMonth(day)
                                             val value = totals[date.toString()] ?: 0L
                                             val active = selected == date
-                                            Box(Modifier.size(36.dp).background(if (active) colorScheme.primary else if (value > 0) colorScheme.primary.copy(alpha = 0.18f + 0.35f * (value.toFloat() / (state.settings.dailyGoal.coerceAtLeast(1) * 60)).coerceIn(0f, 1f)) else colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).semantics { contentDescription = "${date} ${duration(value)}" }.clickable { selected = if (active) null else date }, contentAlignment = Alignment.Center) {
+                                            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(if (active) colorScheme.primary else if (value > 0) colorScheme.primary.copy(alpha = 0.18f + 0.35f * (value.toFloat() / (state.settings.dailyGoal.coerceAtLeast(1) * 60)).coerceIn(0f, 1f)) else colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).semantics { contentDescription = "${date} ${duration(value)}" }.clickable { selected = if (active) null else date }, contentAlignment = Alignment.Center) {
                                                 Text("$day", color = if (active) colorScheme.surface else colorScheme.onSurface, fontSize = 13.sp)
                                             }
                                         }

@@ -1,6 +1,8 @@
 package com.pomodorotimer.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.LocalIndication
+import top.yukonga.miuix.kmp.utils.MiuixIndication
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -40,8 +42,11 @@ fun PomodoroTheme(
     MiuixTheme(
         controller = controller,
         content = {
+            val indicationColor = MiuixTheme.colorScheme.onSurface
+            val pressIndication = remember(indicationColor) { MiuixIndication(indicationColor) }
             CompositionLocalProvider(
                 LocalContentColor provides MiuixTheme.colorScheme.onBackground,
+                LocalIndication provides pressIndication,
             ) {
                 content()
             }

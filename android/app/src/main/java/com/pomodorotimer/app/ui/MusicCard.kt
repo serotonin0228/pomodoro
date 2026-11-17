@@ -1,6 +1,7 @@
 package com.pomodorotimer.app.ui
 
 import android.content.Context
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.pomodorotimer.app.BuildConfig
@@ -40,6 +43,7 @@ import com.pomodorotimer.app.ui.i18n.LocalUiText
 import com.pomodorotimer.app.ui.theme.Dimens
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -134,37 +138,37 @@ fun MusicCard(controller: WorkspaceController) {
             settings.musicMode.ordinal,
             { index -> controller.updateSettings { it.copy(musicMode = MusicMode.entries[index]) } },
             modifier = Modifier.fillMaxWidth(),
+            indication = LocalIndication.current,
         )
         Spacer(Modifier.height(8.dp))
         tracks.forEach { track ->
             val downloaded = localPath(track) != null
             val download = MusicDownloads.statuses[track.id]
             val isPlayingTrack = MusicPlayback.playing && localPath(track) == MusicPlayback.path
-            Row(
-                modifier = Modifier.fillMaxWidth().height(64.dp).clickable(enabled = download?.active != true) { if (isPlayingTrack) MusicService.pause(context) else playTrack(track) }.padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(track.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                    val detail = when {
-                        download?.active == true && download.progress != null -> "${(download.progress * 100).toInt()}%"
-                        download?.active == true -> text.loading
-                        download?.failed == true -> text.downloadFailed
-                        else -> track.artist
-                    }
-                    if (detail.isNotBlank()) Text(detail, fontSize = 12.sp, color = colorScheme.onSurfaceVariantSummary, maxLines = 1)
-                }
-                if (download?.active == true) {
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(progress = download.progress, size = 22.dp, modifier = Modifier.size(22.dp))
-                    }
-                } else {
-                    IconButton(onClick = { if (isPlayingTrack) MusicService.pause(context) else playTrack(track) }, enabled = true, modifier = Modifier.size(48.dp)) {
-                        Icon(if (isPlayingTrack) OutlineIcons.Pause else if (downloaded) OutlineIcons.Play else OutlineIcons.Download, contentDescription = if (isPlayingTrack) text.pause else if (downloaded) text.play else text.download, tint = colorScheme.primary, modifier = Modifier.size(22.dp))
-                    }
-                }
+            val detail = when {
+                download?.active == true && download.progress != null -> "${(download.progress * 100).toInt()}%"
+                download?.active == true -> text.loading
+                download?.failed == true -> text.downloadFailed
+                else -> track.artist
             }
+            BasicComponent(
+                title = track.title,
+                summary = detail.takeIf { it.isNotBlank() },
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
+                enabled = download?.active != true,
+                onClick = { if (isPlayingTrack) MusicService.pause(context) else playTrack(track) },
+                endActions = {
+                    if (download?.active == true) {
+                        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(progress = download.progress, size = 22.dp, modifier = Modifier.size(22.dp))
+                        }
+                    } else {
+                        IconButton(onClick = { if (isPlayingTrack) MusicService.pause(context) else playTrack(track) }, modifier = Modifier.size(48.dp)) {
+                            Icon(if (isPlayingTrack) OutlineIcons.Pause else if (downloaded) OutlineIcons.Play else OutlineIcons.Download, contentDescription = if (isPlayingTrack) text.pause else if (downloaded) text.play else text.download, tint = colorScheme.primary, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                },
+            )
         }
         if (status.isNotBlank()) {
             Text(status, color = colorScheme.onSurfaceVariantSummary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
