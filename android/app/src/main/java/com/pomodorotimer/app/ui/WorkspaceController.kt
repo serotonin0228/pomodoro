@@ -13,6 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import com.pomodorotimer.app.domain.isForeignActive
 import com.pomodorotimer.app.domain.mergeRemoteTimer
 import com.pomodorotimer.app.domain.claimTimer
+import com.pomodorotimer.app.domain.rebaseRunningTimer
 import com.pomodorotimer.app.domain.mergeWorkspace
 import org.json.JSONObject
 import androidx.compose.runtime.getValue
@@ -73,6 +74,7 @@ class WorkspaceController(context: Context) {
     private var localGeneration = 0L
     private var pendingLocal = store.load(account)?.pending == true
     private var lastClockCheck = 0L
+    private var locallyStartedSinceClockCheck: String? = null
     private val drafts = appContext.getSharedPreferences("timer_mode_drafts", Context.MODE_PRIVATE)
 
     private var advanceAt: Long? = null
@@ -100,7 +102,9 @@ class WorkspaceController(context: Context) {
 
             TimerStatus.RUNNING -> commit(pauseState(state, now))
 
-            else -> commit(
+            else -> {
+                locallyStartedSinceClockCheck = state.timer.id
+                commit(
                 state.copy(
                     timer = state.timer.copy(
                         status = TimerStatus.RUNNING,
@@ -110,7 +114,8 @@ class WorkspaceController(context: Context) {
                     ),
                     updatedAt = now,
                 ),
-            )
+                )
+            }
         }
     }
 
@@ -166,6 +171,7 @@ class WorkspaceController(context: Context) {
             round = state.round,
             now = now,
         )
+        if (start) locallyStartedSinceClockCheck = created.id
         commit(
             state.copy(
                 timer = if (start) created.copy(status = TimerStatus.RUNNING, startedAt = now) else created,
@@ -224,14 +230,23 @@ class WorkspaceController(context: Context) {
             repeat(3) {
                 try {
                     if (android.os.SystemClock.elapsedRealtime() - lastClockCheck > 300_000L || lastClockCheck == 0L) {
-                        val before = System.currentTimeMillis()
+                        val beforeWall = System.currentTimeMillis()
+                        val beforeMono = android.os.SystemClock.elapsedRealtime()
                         val server = client.serverTime(session)
-                        val after = System.currentTimeMillis()
-                        if (server != null && after - before < 10_000L) {
-                            val offset = server - (before + after) / 2
+                        val afterMono = android.os.SystemClock.elapsedRealtime()
+                        val afterWall = System.currentTimeMillis()
+                        val roundTrip = afterMono - beforeMono
+                        // A slow or interrupted sample has too much uncertainty to calibrate a clock.
+                        if (server != null && roundTrip in 0..2000L &&
+                            kotlin.math.abs((afterWall - beforeWall) - roundTrip) < 100L) {
+                            val offset = server - (beforeWall + roundTrip / 2)
+                            val oldOffset = Clock.correction()
+                            val rebased = if (isRemoteActive) state else rebaseRunningTimer(state, locallyStartedSinceClockCheck, oldOffset, offset)
                             Clock.setCorrection(offset)
+                            locallyStartedSinceClockCheck = null
                             prefs.edit().putLong("clock_offset", offset).apply()
-                            lastClockCheck = android.os.SystemClock.elapsedRealtime()
+                            lastClockCheck = afterMono
+                            if (rebased != state) commit(rebased)
                         }
                     }
                     val remote = client.fetch(session)

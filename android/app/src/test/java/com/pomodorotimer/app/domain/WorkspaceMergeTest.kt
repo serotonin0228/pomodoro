@@ -41,4 +41,28 @@ class WorkspaceMergeTest {
         assertEquals(local.settings, result.settings)
         assertEquals(listOf(record), result.records)
     }
+    @Test fun delayedSyncAndTakeoverUseOriginalStartTime() {
+        for (mode in Mode.entries) {
+            val original = initialState("a", 100_000).let {
+                it.copy(timer = it.timer.copy(mode = mode, status = TimerStatus.RUNNING, startedAt = 100_000))
+            }
+            // The update arrives eight seconds later; the receiver catches up immediately.
+            val received = mergeRemoteTimer(initialState("b", 108_000), original, false)
+            assertEquals(8L, elapsed(received.timer, 108_000))
+            val claimed = claimTimer(received, "b", 113_000)
+            assertEquals(elapsed(original.timer, 113_000), elapsed(claimed.timer, 113_000))
+            assertEquals(displaySeconds(original.timer, 113_000), displaySeconds(claimed.timer, 113_000))
+        }
+    }
+
+    @Test fun correctingClockAfterStartPreservesElapsedAndAlignsOtherDevice() {
+        val original = initialState("a", 100_000).let {
+            it.copy(timer = it.timer.copy(status = TimerStatus.RUNNING, startedAt = 100_000, createdAt = 100_000))
+        }
+        // Device A's clock was five seconds fast at the instant the timer was started.
+        val corrected = rebaseRunningTimer(original, original.timer.id, 0, -5_000)
+        assertEquals(elapsed(original.timer, 113_000), elapsed(corrected.timer, 108_000))
+        assertEquals(95_000L, corrected.timer.startedAt)
+        assertEquals(corrected, rebaseRunningTimer(corrected, "another-session", -5_000, 0))
+    }
 }

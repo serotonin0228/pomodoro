@@ -23,3 +23,15 @@ fun mergeRemoteTimer(local: AppState, remote: AppState, keepLocalSettings: Boole
 
 fun claimTimer(state: AppState, device: String, now: Long): AppState =
     state.copy(timer = state.timer.copy(device = device), updatedAt = maxOf(now, state.updatedAt + 1))
+
+/** Move a locally started segment to a corrected clock without changing its elapsed time. */
+fun rebaseRunningTimer(state: AppState, timerId: String?, oldOffset: Long, newOffset: Long): AppState {
+    val timer = state.timer
+    val start = timer.startedAt
+    if (timer.id != timerId || timer.status != TimerStatus.RUNNING || start == null || oldOffset == newOffset) return state
+    val delta = newOffset - oldOffset
+    return state.copy(
+        timer = timer.copy(startedAt = start + delta, createdAt = if (timer.createdAt == start) timer.createdAt + delta else timer.createdAt),
+        updatedAt = state.updatedAt + delta,
+    )
+}
