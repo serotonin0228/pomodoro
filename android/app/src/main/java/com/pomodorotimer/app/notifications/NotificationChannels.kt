@@ -11,6 +11,14 @@ object NotificationChannels {
     const val FINISHED = "timer_finished"
     const val MUSIC = "music_playback"
 
+    fun musicNotificationsEnabled(context: Context): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+        val channelEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.getNotificationChannel(MUSIC)?.importance != NotificationManager.IMPORTANCE_NONE
+        } else true
+        return MusicNotificationPolicy.showMediaControls(manager.areNotificationsEnabled(), channelEnabled)
+    }
+
     fun ensure(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return

@@ -12,6 +12,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import com.pomodorotimer.app.domain.ThemeMode
 import com.pomodorotimer.app.service.TimerActionReceiver
+import com.pomodorotimer.app.service.MusicService
 import com.pomodorotimer.app.ui.AppShell
 import com.pomodorotimer.app.ui.WorkspaceController
 import com.pomodorotimer.app.ui.i18n.LocalUiText
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
             registerReceiver(stateReceiver, filter)
         }
         controller?.refresh()
+        MusicService.refreshNotificationSettings()
     }
 
     override fun onPause() {

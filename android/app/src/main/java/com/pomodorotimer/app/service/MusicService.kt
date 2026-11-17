@@ -1,6 +1,9 @@
 package com.pomodorotimer.app.service
 
 import android.app.Notification
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -49,12 +52,30 @@ class MusicService : Service() {
     private var playOrder: List<Int> = emptyList()
     private var orderMode: MusicMode? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val notificationSettingsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val channel = intent?.getStringExtra(NotificationManager.EXTRA_NOTIFICATION_CHANNEL_ID)
+            if (intent?.action == NotificationManager.ACTION_APP_BLOCK_STATE_CHANGED || channel == NotificationChannels.MUSIC) {
+                refreshNotificationVisibility()
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(AudioManager::class.java)
+        NotificationChannels.ensure(this)
+        runningService = this
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val filter = IntentFilter().apply {
+                addAction(NotificationManager.ACTION_NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED)
+                addAction(NotificationManager.ACTION_APP_BLOCK_STATE_CHANGED)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(notificationSettingsReceiver, filter, Context.RECEIVER_EXPORTED)
+            else registerReceiver(notificationSettingsReceiver, filter)
+        }
         session = MediaSession(this, "PomodoroMusic").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() = resume()
@@ -63,7 +84,7 @@ class MusicService : Service() {
                 override fun onSkipToPrevious() = previous()
                 override fun onStop() = stopSelf()
             })
-            isActive = true
+            isActive = NotificationChannels.musicNotificationsEnabled(this@MusicService)
         }
     }
 
@@ -217,7 +238,13 @@ class MusicService : Service() {
 
     // ------------------------------------------------------------ publish state
 
+    private fun refreshNotificationVisibility() {
+        session?.isActive = NotificationChannels.musicNotificationsEnabled(this)
+        if (paths.isNotEmpty()) publish()
+    }
+
     private fun publish() {
+        session?.isActive = NotificationChannels.musicNotificationsEnabled(this)
         val title = titles.getOrNull(index) ?: ""
         MusicPlayback.title = title
         MusicPlayback.path = paths.getOrNull(index).orEmpty()
@@ -256,22 +283,24 @@ class MusicService : Service() {
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return Notification.Builder(this, NotificationChannels.MUSIC)
+        val builder = Notification.Builder(this, NotificationChannels.MUSIC)
             .setSmallIcon(R.drawable.ic_stat_timer)
             .setContentTitle(title.ifBlank { "Pomodoro" })
             .setContentText("背景音乐")
             .setContentIntent(content)
             .setOngoing(playing)
             .setOnlyAlertOnce(true)
-            .addAction(action(ACTION_PREVIOUS, "上一首", 11))
-            .addAction(action(toggle, toggleLabel, 12))
-            .addAction(action(ACTION_NEXT, "下一首", 13))
-            .setStyle(
-                Notification.MediaStyle()
-                    .setMediaSession(session?.sessionToken)
-                    .setShowActionsInCompactView(0, 1, 2),
-            )
-            .build()
+        if (NotificationChannels.musicNotificationsEnabled(this)) {
+            builder.addAction(action(ACTION_PREVIOUS, "上一首", 11))
+                .addAction(action(toggle, toggleLabel, 12))
+                .addAction(action(ACTION_NEXT, "下一首", 13))
+                .setStyle(Notification.MediaStyle().setMediaSession(session?.sessionToken).setShowActionsInCompactView(0, 1, 2))
+        } else {
+            // Android still requires a foreground-service notification, but an inactive media
+            // session and a non-media notification do not request an exempt media control card.
+            builder.setCategory(Notification.CATEGORY_SERVICE)
+        }
+        return builder.build()
     }
 
     private fun action(action: String, label: String, code: Int): Notification.Action {
@@ -333,6 +362,8 @@ class MusicService : Service() {
     }
 
     override fun onDestroy() {
+        if (runningService === this) runningService = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) runCatching { unregisterReceiver(notificationSettingsReceiver) }
         mainHandler.removeCallbacksAndMessages(null)
         MusicPlayback.playing = false
         MusicPlayback.title = ""
@@ -346,6 +377,11 @@ class MusicService : Service() {
 
     companion object {
         const val MUSIC_ID = 2001
+        @Volatile private var runningService: MusicService? = null
+
+        fun refreshNotificationSettings() {
+            runningService?.let { service -> service.mainHandler.post { service.refreshNotificationVisibility() } }
+        }
         private const val ACTION_PLAY = "com.pomodorotimer.app.music.PLAY"
         private const val ACTION_PAUSE = "com.pomodorotimer.app.music.PAUSE"
         private const val ACTION_RESUME = "com.pomodorotimer.app.music.RESUME"
