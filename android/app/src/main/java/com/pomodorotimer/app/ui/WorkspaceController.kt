@@ -7,6 +7,12 @@ import com.pomodorotimer.app.data.StateCodec
 import com.pomodorotimer.app.domain.modeDraft
 import com.pomodorotimer.app.domain.switchModeState
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
+import com.pomodorotimer.app.domain.isForeignActive
+import com.pomodorotimer.app.domain.mergeRemoteTimer
+import com.pomodorotimer.app.domain.claimTimer
 import com.pomodorotimer.app.domain.mergeWorkspace
 import org.json.JSONObject
 import androidx.compose.runtime.getValue
@@ -63,9 +69,17 @@ class WorkspaceController(context: Context) {
         private set
     val cloudSyncError: Boolean get() = cloudSyncStatus == CloudSyncStatus.ERROR
     private val syncMutex = Mutex()
+    private val syncRequests = Channel<Unit>(Channel.CONFLATED)
+    private var localGeneration = 0L
+    private var pendingLocal = store.load(account)?.pending == true
+    private var lastClockCheck = 0L
     private val drafts = appContext.getSharedPreferences("timer_mode_drafts", Context.MODE_PRIVATE)
 
     private var advanceAt: Long? = null
+
+    val isRemoteActive: Boolean get() = isForeignActive(state.timer, device)
+    fun requestSync() { syncRequests.trySend(Unit) }
+    suspend fun awaitSync() { withTimeoutOrNull(4_000L) { syncRequests.receive() } }
 
     val isRunning: Boolean get() = state.timer.status == TimerStatus.RUNNING
     val isPaused: Boolean get() = state.timer.status == TimerStatus.PAUSED
@@ -76,6 +90,7 @@ class WorkspaceController(context: Context) {
 
     /** The big button: start, pause, resume, or continue to the next phase after completion. */
     fun primary() {
+        if (isRemoteActive) return
         val now = Clock.now()
         when (state.timer.status) {
             TimerStatus.COMPLETED -> advance(
@@ -101,6 +116,7 @@ class WorkspaceController(context: Context) {
 
     /** Ends the session and keeps the focus time that was actually observed. */
     fun endAndSave() {
+        if (isRemoteActive) return
         val now = Clock.now()
         val finished = finishState(state, now, completed = false)
         commit(
@@ -113,6 +129,7 @@ class WorkspaceController(context: Context) {
 
     /** Discards a session that just started, leaving no record behind. */
     fun endAndDiscard() {
+        if (isRemoteActive) return
         val now = Clock.now()
         commit(
             state.copy(
@@ -124,6 +141,7 @@ class WorkspaceController(context: Context) {
     }
 
     fun changeMode(mode: Mode) {
+        if (isRemoteActive) return
         if (mode == state.timer.mode) return
         val now = Clock.now()
         val draft = modeDraft(state, now)
@@ -138,6 +156,7 @@ class WorkspaceController(context: Context) {
     }
 
     fun advance(phase: Phase, start: Boolean) {
+        if (isRemoteActive) return
         val now = Clock.now()
         val created = newTimer(
             device = device,
@@ -192,43 +211,54 @@ class WorkspaceController(context: Context) {
         if (merged != state) commit(merged)
     }
 
-    /** One automatic synchronization cycle. It never writes until it has read the current revision. */
+    /** Pull before every write; server revisions prevent one device overwriting another. */
     suspend fun syncCloud() {
         val prefs = appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE)
-        val original = prefs.getString("session", null) ?: run { cloudSyncStatus = CloudSyncStatus.OFFLINE; return }
+        var raw = prefs.getString("session", null) ?: run { cloudSyncStatus = CloudSyncStatus.OFFLINE; return }
         if (!syncMutex.tryLock()) return
         try {
-        cloudSyncStatus = CloudSyncStatus.SYNCING
-        var raw = original
-        var session = runCatching {
-            val o = JSONObject(raw)
-            CloudClient.Session(o.getString("userId"), o.getString("access"), o.optString("refresh"))
-        }.getOrNull() ?: run { cloudSyncStatus = CloudSyncStatus.ERROR; return }
-        val client = CloudClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
-        if (!client.configured) { cloudSyncStatus = CloudSyncStatus.ERROR; return }
-        try {
-            var attempt = 0
-            while (attempt++ < 3) {
+            cloudSyncStatus = CloudSyncStatus.SYNCING
+            var session = parseSession(raw) ?: run { cloudSyncStatus = CloudSyncStatus.ERROR; return }
+            val client = CloudClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+            if (!client.configured) { cloudSyncStatus = CloudSyncStatus.ERROR; return }
+            repeat(3) {
                 try {
+                    if (android.os.SystemClock.elapsedRealtime() - lastClockCheck > 300_000L || lastClockCheck == 0L) {
+                        val before = System.currentTimeMillis()
+                        val server = client.serverTime(session)
+                        val after = System.currentTimeMillis()
+                        if (server != null && after - before < 10_000L) {
+                            val offset = server - (before + after) / 2
+                            Clock.setCorrection(offset)
+                            prefs.edit().putLong("clock_offset", offset).apply()
+                            lastClockCheck = android.os.SystemClock.elapsedRealtime()
+                        }
+                    }
                     val remote = client.fetch(session)
                     if (prefs.getString("session", null) != raw) return
-                    val merged = if (remote == null) state else mergeWorkspace(state, remote.state)
-                    var synchronizedState: AppState
-                    if (remote == null || merged != remote.state) {
-                        val saved = client.save(session, merged, remote?.revision ?: 0L, device)
-                        if (prefs.getString("session", null) != raw) return
-                        prefs.edit().putLong("revision", saved.revision).apply()
-                        applyRemote(saved.state)
-                        synchronizedState = saved.state
-                    } else {
-                        prefs.edit().putLong("revision", remote.revision).apply()
-                        applyRemote(remote.state)
-                        synchronizedState = remote.state
+                    val local = state
+                    val generation = localGeneration
+                    val knownRevision = prefs.getLong("revision", 0L)
+                    val remoteChanged = remote != null && remote.revision > knownRevision
+                    val adoptRemote = remoteChanged && remote != null && (
+                        !pendingLocal || isForeignActive(local.timer, device) ||
+                        (isForeignActive(remote.state.timer, device) && local.timer.status == TimerStatus.IDLE) ||
+                        (local.timer.id == remote.state.timer.id && local.timer.device != remote.state.timer.device)
+                    )
+                    val merged = when {
+                        remote == null -> local
+                        adoptRemote -> mergeRemoteTimer(local, remote.state, pendingLocal)
+                        else -> mergeWorkspace(local, remote.state)
                     }
-                    cloudSyncStatus = if (state == synchronizedState) CloudSyncStatus.SYNCED else CloudSyncStatus.PENDING
+                    val saved = if (remote == null || merged != remote.state)
+                        client.save(session, merged, remote?.revision ?: 0L, device) else remote
+                    if (prefs.getString("session", null) != raw) return
+                    val result = if (generation == localGeneration) saved.state
+                        else mergeWorkspace(state, saved.state)
+                    acceptSynced(result, saved.state, saved.revision)
                     return
                 } catch (_: CloudClient.ConflictException) {
-                    // A second device wrote meanwhile; re-read and merge on the next attempt.
+                    // Re-fetch and re-evaluate ownership before retrying.
                 } catch (expired: CloudClient.AuthExpiredException) {
                     if (session.refreshToken.isEmpty()) throw expired
                     val refreshed = client.refresh(session)
@@ -240,24 +270,72 @@ class WorkspaceController(context: Context) {
                 }
             }
             cloudSyncStatus = CloudSyncStatus.ERROR
-        } catch (cancel: kotlinx.coroutines.CancellationException) {
-            throw cancel
-        } catch (_: Exception) {
-            cloudSyncStatus = CloudSyncStatus.ERROR
-        }
-        } finally {
-            syncMutex.unlock()
-        }
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel
+        } catch (_: Exception) { cloudSyncStatus = CloudSyncStatus.ERROR
+        } finally { syncMutex.unlock() }
+    }
+
+    private fun parseSession(raw: String): CloudClient.Session? = runCatching {
+        val o = JSONObject(raw)
+        CloudClient.Session(o.getString("userId"), o.getString("access"), o.optString("refresh"))
+    }.getOrNull()
+
+    /** Take ownership only after an atomic revision-checked server write succeeds. */
+    suspend fun takeover(): Boolean = syncMutex.withLock {
+        val targetId = state.timer.id
+        val prefs = appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE)
+        val raw = prefs.getString("session", null) ?: return@withLock false
+        val session = parseSession(raw) ?: return@withLock false
+        val client = CloudClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+        try {
+            repeat(3) {
+                try {
+                    val remote = client.fetch(session) ?: return@withLock false
+                    if (prefs.getString("session", null) != raw || remote.state.timer.id != targetId ||
+                        !isForeignActive(remote.state.timer, device)) return@withLock false
+                    val generation = localGeneration
+                    val claimed = claimTimer(mergeRemoteTimer(state, remote.state, pendingLocal), device, Clock.now())
+                    val saved = client.save(session, claimed, remote.revision, device)
+                    if (prefs.getString("session", null) != raw) return@withLock false
+                    val result = if (generation == localGeneration) saved.state
+                        else mergeRemoteTimer(state, saved.state, true)
+                    acceptSynced(result, saved.state, saved.revision)
+                    return@withLock true
+                } catch (_: CloudClient.ConflictException) { }
+            }
+            false
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel
+        } catch (_: Exception) { cloudSyncStatus = CloudSyncStatus.ERROR; false }
+    }
+
+    private fun acceptSynced(next: AppState, saved: AppState, revision: Long) {
+        val prefs = appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE)
+        prefs.edit().putLong("revision", revision).apply()
+        if (next != state) {
+            state = next
+            if (isRemoteActive) advanceAt = null
+            store.save(account, PersistedWorkspace(next, next != saved, revision))
+            syncSystemState(next)
+        } else store.save(account, PersistedWorkspace(next, next != saved, revision))
+        pendingLocal = next != saved
+        cloudSyncStatus = if (pendingLocal) CloudSyncStatus.PENDING else CloudSyncStatus.SYNCED
+        if (pendingLocal) requestSync()
     }
 
     /** Reloads the workspace after a notification action changed it behind the screen. */
     fun refresh() {
         val loaded = store.load(account)?.state ?: return
-        if (loaded.updatedAt != state.updatedAt) state = loaded
+        if (loaded.updatedAt != state.updatedAt) {
+            state = loaded
+            pendingLocal = true
+            localGeneration++
+            requestSync()
+        }
     }
 
     fun tick(now: Long = Clock.now()) {
         val timer = state.timer
+        if (isRemoteActive) { advanceAt = null; return }
 
         if (timer.status == TimerStatus.RUNNING &&
             timer.mode == Mode.COUNTDOWN &&
@@ -282,6 +360,9 @@ class WorkspaceController(context: Context) {
 
     private fun commit(next: AppState) {
         state = next
+        pendingLocal = true
+        localGeneration++
+        requestSync()
         if (appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE).contains("session")) cloudSyncStatus = CloudSyncStatus.PENDING
         store.save(account, PersistedWorkspace(next, pending = true, revision = 0L))
         syncSystemState(next)
@@ -290,12 +371,13 @@ class WorkspaceController(context: Context) {
     /** Keeps the foreground service and the exact alarm in step with the timer. */
     private fun syncSystemState(next: AppState) {
         val timer = next.timer
+        val foreign = isForeignActive(timer, device)
         // The accessibility service reads this snapshot instead of querying JavaScript.
         runCatching {
             FocusGuardStore.session(
                 appContext,
                 timer.id,
-                when (timer.status) {
+                when (if (foreign) TimerStatus.IDLE else timer.status) {
                     TimerStatus.RUNNING -> "running"
                     TimerStatus.PAUSED -> "paused"
                     TimerStatus.COMPLETED -> "completed"
@@ -306,8 +388,8 @@ class WorkspaceController(context: Context) {
                 remaining(timer, Clock.now()) * 1000,
             )
         }
-        runCatching { MusicCoordinator.sync(appContext, next) }
-        if (timer.status == TimerStatus.RUNNING || timer.status == TimerStatus.PAUSED) {
+        runCatching { MusicCoordinator.sync(appContext, if (foreign) next.copy(timer = timer.copy(status = TimerStatus.IDLE)) else next) }
+        if (!foreign && (timer.status == TimerStatus.RUNNING || timer.status == TimerStatus.PAUSED)) {
             runCatching { TimerService.start(appContext) }
         } else {
             runCatching { TimerService.stop(appContext) }

@@ -25,9 +25,9 @@ object Reminders {
     fun sync(context: Context, timer: TimerSession) {
         cancel(context)
         if (timer.status != TimerStatus.RUNNING || timer.mode != Mode.COUNTDOWN) return
-        val startedAt = timer.startedAt ?: return
+        timer.startedAt ?: return
         val left = (timer.duration - elapsed(timer)).coerceAtLeast(0)
-        val triggerAt = startedAt + left * 1000
+        val triggerAt = System.currentTimeMillis() + left * 1000
 
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val pending = pendingIntent(context)

@@ -22,4 +22,23 @@ class WorkspaceMergeTest {
         assertEquals(local.timer, merged.timer)
         assertEquals(local.settings, merged.settings)
     }
+    @Test fun takeoverPreservesRunningTimeAndSession() {
+        val original = initialState("a", 1000).let { it.copy(timer = it.timer.copy(status = TimerStatus.RUNNING, startedAt = 1000, elapsed = 30)) }
+        val claimed = claimTimer(original, "b", 5000)
+        assertEquals("b", claimed.timer.device)
+        assertEquals(original.timer.copy(device = "b"), claimed.timer)
+        assertEquals(original.segments, claimed.segments)
+        assertEquals(true, isForeignActive(claimed.timer, "a"))
+        assertEquals(false, isForeignActive(claimed.timer, "b"))
+    }
+
+    @Test fun remoteTimerPreservesLocalRecordsAndSettings() {
+        val record = FocusRecord("local", Mode.STOPWATCH, 3000, 4000, 1, listOf(Segment(3000, 4000)))
+        val local = initialState("a", 8000).copy(records = listOf(record), settings = Settings.Default.copy(focusMinutes = 30))
+        val remote = initialState("b", 5000).let { it.copy(timer = it.timer.copy(status = TimerStatus.RUNNING, startedAt = 5000)) }
+        val result = mergeRemoteTimer(local, remote, true)
+        assertEquals(remote.timer, result.timer)
+        assertEquals(local.settings, result.settings)
+        assertEquals(listOf(record), result.records)
+    }
 }

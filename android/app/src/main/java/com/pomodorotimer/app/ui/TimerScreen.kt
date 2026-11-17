@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,6 +84,9 @@ fun TimerScreen(
     val track = queue?.titles?.getOrNull(MusicRepository.startIndex(queue, state.settings.musicTrackId))
     var confirmingEnd by remember { mutableStateOf(false) }
     var showingMusic by remember { mutableStateOf(false) }
+    var takeoverBusy by remember { mutableStateOf(false) }
+    var takeoverError by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val observed = elapsed(timer, now)
     val canDiscard = timer.phase == Phase.FOCUS && observed <= 300
@@ -129,15 +134,23 @@ fun TimerScreen(
                 }
                 Spacer(Modifier.height(42.dp))
                 Button(
-                    onClick = { controller.primary() },
+                    onClick = {
+                        if (controller.isRemoteActive) {
+                            if (!takeoverBusy) scope.launch {
+                                takeoverBusy = true
+                                takeoverError = !controller.takeover()
+                                takeoverBusy = false
+                            }
+                        } else controller.primary()
+                    },
                     modifier = Modifier.widthIn(max = 220.dp).fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColorsPrimary(),
                 ) {
-                    Text(when (timer.status) { TimerStatus.RUNNING -> text.pause; TimerStatus.PAUSED -> text.resume; TimerStatus.COMPLETED -> text.nextPhase; TimerStatus.IDLE -> text.start }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (controller.isRemoteActive) "在此设备接管" else when (timer.status) { TimerStatus.RUNNING -> text.pause; TimerStatus.PAUSED -> text.resume; TimerStatus.COMPLETED -> text.nextPhase; TimerStatus.IDLE -> text.start }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.height(12.dp))
                 Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-                    if (controller.isActive || controller.isCompleted) {
+                    if (!controller.isRemoteActive && (controller.isActive || controller.isCompleted)) {
                         TextButton(text = text.end, onClick = { confirmingEnd = true }, modifier = Modifier.widthIn(max = 220.dp).fillMaxWidth())
                     }
                 }
@@ -151,6 +164,10 @@ fun TimerScreen(
                 }
                 Spacer(Modifier.height(8.dp))
             }
+    }
+
+    WindowDialog(show = takeoverError, title = "接管失败", summary = "请检查云同步连接后重试。", onDismissRequest = { takeoverError = false }) {
+        TextButton(text = "确定", onClick = { takeoverError = false }, modifier = Modifier.fillMaxWidth())
     }
 
     WindowDialog(

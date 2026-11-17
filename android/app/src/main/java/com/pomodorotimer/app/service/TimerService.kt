@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import com.pomodorotimer.app.data.WorkspaceStore
+import com.pomodorotimer.app.domain.isForeignActive
 import com.pomodorotimer.app.domain.Clock
 import com.pomodorotimer.app.domain.Phase
 import com.pomodorotimer.app.domain.TimerStatus
@@ -31,8 +32,9 @@ class TimerService : Service() {
             return START_NOT_STICKY
         }
 
-        val timer = WorkspaceStore(this).load(null)?.state?.timer
-        if (timer == null || (timer.status != TimerStatus.RUNNING && timer.status != TimerStatus.PAUSED)) {
+        val store = WorkspaceStore(this)
+        val timer = store.load(null)?.state?.timer
+        if (timer == null || isForeignActive(timer, store.deviceId()) || (timer.status != TimerStatus.RUNNING && timer.status != TimerStatus.PAUSED)) {
             stopTimer()
             return START_NOT_STICKY
         }

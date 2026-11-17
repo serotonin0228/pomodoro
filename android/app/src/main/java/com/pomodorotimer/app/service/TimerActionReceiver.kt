@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.pomodorotimer.app.data.PersistedWorkspace
 import com.pomodorotimer.app.data.WorkspaceStore
+import com.pomodorotimer.app.domain.isForeignActive
 import com.pomodorotimer.app.domain.Clock
 import com.pomodorotimer.app.domain.Mode
 import com.pomodorotimer.app.domain.Phase
@@ -25,6 +26,7 @@ class TimerActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = WorkspaceStore(context)
         val current = store.load(null)?.state ?: return
+        if (isForeignActive(current.timer, store.deviceId())) return
         val now = Clock.now()
 
         when (intent.action) {

@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
             registerReceiver(stateReceiver, filter)
         }
         controller?.refresh()
+        controller?.requestSync()
         MusicService.refreshNotificationSettings()
     }
 

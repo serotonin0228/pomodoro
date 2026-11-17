@@ -61,7 +61,7 @@ fun AppShell(controller: WorkspaceController) {
     LaunchedEffect(Unit) {
         while (true) {
             controller.syncCloud()
-            delay(15_000)
+            controller.awaitSync()
         }
     }
 

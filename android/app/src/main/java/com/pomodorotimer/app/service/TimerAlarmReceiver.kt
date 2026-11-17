@@ -4,7 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.pomodorotimer.app.data.WorkspaceStore
-import com.pomodorotimer.app.domain.Phase
+import com.pomodorotimer.app.domain.isForeignActive
+import com.pomodorotimer.app.domain.Mode
+import com.pomodorotimer.app.domain.TimerStatus
+import com.pomodorotimer.app.domain.elapsed
 
 /**
  * Fires when the countdown reaches zero while the app is not ticking.
@@ -15,8 +18,11 @@ import com.pomodorotimer.app.domain.Phase
 class TimerAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        val timer = WorkspaceStore(context).load(null)?.state?.timer
-        TimerService.notifyFinished(context, timer?.phase ?: Phase.FOCUS)
+        val store = WorkspaceStore(context)
+        val timer = store.load(null)?.state?.timer ?: return
+        if (isForeignActive(timer, store.deviceId()) || timer.status != TimerStatus.RUNNING ||
+            timer.mode != Mode.COUNTDOWN || elapsed(timer) < timer.duration) return
+        TimerService.notifyFinished(context, timer.phase)
         TimerService.stop(context)
     }
 }
