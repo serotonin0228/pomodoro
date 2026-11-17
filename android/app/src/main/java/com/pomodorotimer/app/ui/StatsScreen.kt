@@ -1,7 +1,6 @@
 package com.pomodorotimer.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -97,7 +96,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                     listOf(text.rangeDay, text.rangeWeek, text.rangeMonth), period.ordinal,
                     { index -> period = StatisticsPeriod.entries[index]; offset = 0; selected = null },
                     modifier = Modifier.fillMaxWidth(),
-                    indication = LocalIndication.current,
+                    indication = null,
                 )
             }
             item {

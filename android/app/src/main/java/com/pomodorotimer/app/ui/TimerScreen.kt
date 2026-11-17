@@ -1,7 +1,6 @@
 package com.pomodorotimer.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
@@ -111,7 +110,7 @@ fun TimerScreen(
                         if (timer.mode != mode) controller.changeMode(mode)
                     },
                     modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
-                    indication = LocalIndication.current,
+                    indication = null,
                 )
                 Spacer(Modifier.weight(1f))
                 BoxWithConstraints(modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {

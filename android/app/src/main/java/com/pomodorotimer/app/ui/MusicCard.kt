@@ -1,7 +1,6 @@
 package com.pomodorotimer.app.ui
 
 import android.content.Context
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,7 +137,7 @@ fun MusicCard(controller: WorkspaceController) {
             settings.musicMode.ordinal,
             { index -> controller.updateSettings { it.copy(musicMode = MusicMode.entries[index]) } },
             modifier = Modifier.fillMaxWidth(),
-            indication = LocalIndication.current,
+            indication = null,
         )
         Spacer(Modifier.height(8.dp))
         tracks.forEach { track ->
