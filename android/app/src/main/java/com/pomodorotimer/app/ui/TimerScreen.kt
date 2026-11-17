@@ -155,7 +155,7 @@ fun TimerScreen(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Card(modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().clickable { showingMusic = true }) {
+                Card(onClick = { showingMusic = true }, modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
                     Row(modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = OutlineIcons.Music, contentDescription = null, tint = colorScheme.primary)
                         Text(track ?: text.sectionMusic, modifier = Modifier.weight(1f), color = colorScheme.onSurface, fontSize = 15.sp, maxLines = 1)
