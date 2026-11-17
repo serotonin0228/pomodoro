@@ -109,7 +109,7 @@ fun newTimer(
 ): TimerSession {
     val minutes = if (phase == Phase.FOCUS) {
         settings.focusMinutes
-    } else if (round > 0 && round % settings.rounds == 0) {
+    } else if (round > 0 && round % settings.rounds.coerceAtLeast(1) == 0) {
         settings.longBreakMinutes
     } else {
         settings.breakMinutes
@@ -235,7 +235,7 @@ fun finishState(s: AppState, now: Long = Clock.now(), completed: Boolean = false
 private val zone: ZoneId get() = ZoneId.systemDefault()
 
 /** Local calendar day key, e.g. `2026-11-06`, in the device time zone. */
-fun dayKey(instant: Long): String = LocalDate.ofInstant(Instant.ofEpochMilli(instant), zone).toString()
+fun dayKey(instant: Long): String = Instant.ofEpochMilli(instant).atZone(zone).toLocalDate().toString()
 
 /**
  * Merge overlapping intervals before summing, so two devices recording the same session can never
@@ -262,7 +262,7 @@ fun dailyTotals(records: List<FocusRecord>): Map<String, Long> {
     for (x in merged) {
         var cursor = x.start
         while (cursor < x.end) {
-            val date = LocalDate.ofInstant(Instant.ofEpochMilli(cursor), zone)
+            val date = Instant.ofEpochMilli(cursor).atZone(zone).toLocalDate()
             val nextMidnight = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
             val end = minOf(nextMidnight, x.end)
             val key = date.toString()
@@ -317,4 +317,23 @@ fun formatDuration(seconds: Long): String {
         minutes > 0 -> "${minutes}分钟"
         else -> "${seconds}秒"
     }
+}
+
+/** Finish one elapsed countdown and start the configured next phase, if requested. */
+fun completeCountdown(s: AppState, device: String, now: Long): AppState {
+    val timer = s.timer
+    if (timer.status != TimerStatus.RUNNING || timer.mode != Mode.COUNTDOWN || elapsed(timer, now) < timer.duration) return s
+    val finished = finishState(s, now, completed = true)
+    val autoNext = if (timer.phase == Phase.FOCUS) s.settings.autoBreak else s.settings.autoFocus
+    if (!autoNext) return finished
+    val nextPhase = if (timer.phase == Phase.FOCUS) Phase.BREAK else Phase.FOCUS
+    val next = newTimer(device, finished.settings, Mode.COUNTDOWN, nextPhase, finished.round, now)
+    return finished.copy(timer = next.copy(status = TimerStatus.RUNNING, startedAt = now), segments = emptyList())
+}
+
+/** Exact wall-clock deadline, keeping subsecond precision and clock calibration. */
+fun countdownDeadline(timer: TimerSession, correction: Long): Long? {
+    if (timer.mode != Mode.COUNTDOWN || timer.status != TimerStatus.RUNNING) return null
+    val start = timer.startedAt ?: return null
+    return start + (timer.duration - timer.elapsed).coerceAtLeast(0L) * 1000L - correction
 }

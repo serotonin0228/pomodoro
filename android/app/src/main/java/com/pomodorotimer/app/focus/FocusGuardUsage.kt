@@ -1,5 +1,6 @@
 package com.pomodorotimer.app.focus
 
+import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -12,9 +13,10 @@ object FocusGuardUsage {
       Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED
   } catch (_: Exception) { false }
   data class Foreground(val packageName: String, val at: Long)
+  @SuppressLint("MissingPermission") // Checked via AppOps; the special access remains optional.
   fun latest(context: Context, after: Long, now: Long): Foreground? {
     if (!allowed(context)) return null
-    val events = context.getSystemService(UsageStatsManager::class.java).queryEvents(maxOf(after - 1000, now - 15000), now)
+    val events = try { context.getSystemService(UsageStatsManager::class.java).queryEvents(maxOf(after - 1000, now - 15000), now) } catch (_: SecurityException) { return null }
     val event = UsageEvents.Event()
     var latest: Foreground? = null
     while (events.hasNextEvent()) {

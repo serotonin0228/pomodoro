@@ -45,11 +45,11 @@ object TimerNotifications {
             if (timer.mode == Mode.COUNTDOWN) {
                 builder.setUsesChronometer(true)
                 builder.setChronometerCountDown(true)
-                builder.setWhen(now + remaining(timer, now) * 1000)
+                builder.setWhen(System.currentTimeMillis() + remaining(timer, now) * 1000)
                 builder.setContentText("剩余 ${clock(remaining(timer, now))}")
             } else {
                 builder.setUsesChronometer(true)
-                builder.setWhen(now - elapsed(timer, now) * 1000)
+                builder.setWhen(System.currentTimeMillis() - elapsed(timer, now) * 1000)
                 builder.setContentText("已专注 ${clock(elapsed(timer, now))}")
             }
             builder.addAction(
@@ -65,10 +65,10 @@ object TimerNotifications {
         return builder.build()
     }
 
-    fun finished(context: Context, phase: Phase): Notification {
+    fun finished(context: Context, phase: Phase, sound: Boolean = true): Notification {
         NotificationChannels.ensure(context)
         val title = if (phase == Phase.FOCUS) "专注完成" else "休息结束"
-        return Notification.Builder(context, NotificationChannels.FINISHED)
+        return Notification.Builder(context, if (sound) NotificationChannels.FINISHED else NotificationChannels.FINISHED_SILENT)
             .setSmallIcon(R.drawable.ic_stat_timer)
             .setContentTitle(title)
             .setContentText("打开番茄钟查看本次记录")

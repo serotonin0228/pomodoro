@@ -146,7 +146,7 @@ fun TimerScreen(
                     modifier = Modifier.widthIn(max = 220.dp).fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColorsPrimary(),
                 ) {
-                    Text(if (controller.isRemoteActive) "在此设备接管" else when (timer.status) { TimerStatus.RUNNING -> text.pause; TimerStatus.PAUSED -> text.resume; TimerStatus.COMPLETED -> text.nextPhase; TimerStatus.IDLE -> text.start }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (controller.isRemoteActive) (if (state.settings.language == com.pomodorotimer.app.domain.Language.EN) "Take over here" else "在此设备接管") else when (timer.status) { TimerStatus.RUNNING -> text.pause; TimerStatus.PAUSED -> text.resume; TimerStatus.COMPLETED -> text.nextPhase; TimerStatus.IDLE -> text.start }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.height(12.dp))
                 Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
@@ -166,8 +166,8 @@ fun TimerScreen(
             }
     }
 
-    WindowDialog(show = takeoverError, title = "接管失败", summary = "请检查云同步连接后重试。", onDismissRequest = { takeoverError = false }) {
-        TextButton(text = "确定", onClick = { takeoverError = false }, modifier = Modifier.fillMaxWidth())
+    WindowDialog(show = takeoverError, title = if (state.settings.language == com.pomodorotimer.app.domain.Language.EN) "Unable to take over" else "接管失败", summary = if (state.settings.language == com.pomodorotimer.app.domain.Language.EN) "Check your cloud connection and try again." else "请检查云同步连接后重试。", onDismissRequest = { takeoverError = false }) {
+        TextButton(text = if (state.settings.language == com.pomodorotimer.app.domain.Language.EN) "OK" else "确定", onClick = { takeoverError = false }, modifier = Modifier.fillMaxWidth())
     }
 
     WindowDialog(

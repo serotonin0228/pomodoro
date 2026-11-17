@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import com.pomodorotimer.app.data.PersistedWorkspace
 import com.pomodorotimer.app.data.WorkspaceStore
+import com.pomodorotimer.app.data.MusicCoordinator
+import com.pomodorotimer.app.focus.FocusGuardStore
+import com.pomodorotimer.app.domain.remaining
 import com.pomodorotimer.app.domain.isForeignActive
 import com.pomodorotimer.app.domain.Clock
 import com.pomodorotimer.app.domain.Mode
@@ -75,6 +78,10 @@ class TimerActionReceiver : BroadcastReceiver() {
 
     private fun persist(context: Context, store: WorkspaceStore, state: com.pomodorotimer.app.domain.AppState) {
         store.save(null, PersistedWorkspace(state, pending = true, revision = 0L))
+        val timer = state.timer
+        FocusGuardStore.session(context, timer.id, timer.status.name.lowercase(), timer.phase.name.lowercase(),
+            timer.mode == Mode.COUNTDOWN, remaining(timer, Clock.now()) * 1000)
+        runCatching { MusicCoordinator.sync(context, state) }
         context.sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(context.packageName))
     }
 

@@ -113,4 +113,30 @@ class ModelTest {
             rangeGoal(state.settings.copy(goalType = GoalType.NONE), listOf(d1), totals, emptyList(), now),
         )
     }
+    @Test fun `countdown alarm keeps fractional second precision and clock correction`() {
+        val timer = initialState("device", 0).timer.copy(status = TimerStatus.RUNNING, startedAt = 1450, duration = 60, elapsed = 3)
+        assertEquals(57450L, countdownDeadline(timer, 1000))
+        assertEquals(null, countdownDeadline(timer.copy(status = TimerStatus.PAUSED), 1000))
+    }
+
+    @Test fun `automatic transition records focus once and starts break`() {
+        val initial = initialState("device", 1000).let {
+            it.copy(settings = it.settings.copy(autoBreak = true), timer = it.timer.copy(duration = 60, status = TimerStatus.RUNNING, startedAt = 1000))
+        }
+        assertEquals(initial, completeCountdown(initial, "device", 60999))
+        val completed = completeCountdown(initial, "device", 61000)
+        assertEquals(1, completed.records.size)
+        assertEquals(60L, completed.records[0].seconds)
+        assertEquals(Phase.BREAK, completed.timer.phase)
+        assertEquals(TimerStatus.RUNNING, completed.timer.status)
+        assertEquals(61000L, completed.timer.startedAt)
+        assertEquals(completed, completeCountdown(completed, "device", 61000))
+    }
+
+    @Test fun `nonautomatic completion keeps finished state and guards invalid rounds`() {
+        val state = initialState("device", 1000).let { it.copy(timer = it.timer.copy(duration = 1, status = TimerStatus.RUNNING, startedAt = 1000)) }
+        val completed = completeCountdown(state, "device", 2000)
+        assertEquals(TimerStatus.COMPLETED, completed.timer.status)
+        assertEquals(900L, newTimer("device", state.settings.copy(rounds = 0), phase = Phase.BREAK, round = 1).duration)
+    }
 }

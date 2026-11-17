@@ -12,6 +12,8 @@ import com.pomodorotimer.app.data.WorkspaceStore
 import com.pomodorotimer.app.domain.isForeignActive
 import com.pomodorotimer.app.domain.Clock
 import com.pomodorotimer.app.domain.Phase
+import com.pomodorotimer.app.domain.Settings
+import android.media.RingtoneManager
 import com.pomodorotimer.app.domain.TimerStatus
 import com.pomodorotimer.app.notifications.NotificationChannels
 import com.pomodorotimer.app.notifications.TimerNotifications
@@ -82,14 +84,16 @@ class TimerService : Service() {
         }
 
         /** Completion notice, used when the process was asleep and the alarm is what woke us. */
-        fun notifyFinished(context: Context, phase: Phase) {
+        fun notifyFinished(context: Context, phase: Phase, settings: Settings) {
             NotificationChannels.ensure(context)
-            val manager = context.getSystemService(NotificationManager::class.java) ?: return
-            runCatching {
-                manager.notify(
-                    TimerNotifications.FINISHED_ID,
-                    TimerNotifications.finished(context, phase),
-                )
+            if (settings.notifications) {
+                val manager = context.getSystemService(NotificationManager::class.java) ?: return
+                runCatching { manager.notify(TimerNotifications.FINISHED_ID, TimerNotifications.finished(context, phase, settings.sound)) }
+            } else if (settings.sound) {
+                runCatching {
+                    val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                    RingtoneManager.getRingtone(context, uri)?.play()
+                }
             }
         }
     }

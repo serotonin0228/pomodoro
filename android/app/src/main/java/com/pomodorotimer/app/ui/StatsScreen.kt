@@ -46,7 +46,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
     var offset by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<LocalDate?>(null) }
     var deletingRecord by remember { mutableStateOf<FocusRecord?>(null) }
-    val today = LocalDate.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())
+    val today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
     val days = remember(today, period, offset) { statisticsDays(today, period, offset) }
     val totals = remember(state.records) { dailyTotals(state.records) }
     val records = remember(state.records, days) { recordsInDays(state.records, days).sortedByDescending { it.start } }

@@ -9,6 +9,7 @@ object NotificationChannels {
 
     const val ONGOING = "timer_ongoing"
     const val FINISHED = "timer_finished"
+    const val FINISHED_SILENT = "timer_finished_silent"
     const val MUSIC = "music_playback"
 
     fun musicNotificationsEnabled(context: Context): Boolean {
@@ -47,6 +48,12 @@ object NotificationChannels {
                     setSound(null, null)
                 },
             )
+        }
+        if (manager.getNotificationChannel(FINISHED_SILENT) == null) {
+            manager.createNotificationChannel(NotificationChannel(FINISHED_SILENT, "计时结束（静音）", NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(null, null)
+                enableVibration(false)
+            })
         }
         if (manager.getNotificationChannel(FINISHED) == null) {
             manager.createNotificationChannel(

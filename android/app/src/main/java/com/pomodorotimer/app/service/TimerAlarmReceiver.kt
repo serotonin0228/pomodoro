@@ -20,9 +20,11 @@ class TimerAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = WorkspaceStore(context)
         val timer = store.load(null)?.state?.timer ?: return
-        if (isForeignActive(timer, store.deviceId()) || timer.status != TimerStatus.RUNNING ||
-            timer.mode != Mode.COUNTDOWN || elapsed(timer) < timer.duration) return
-        TimerService.notifyFinished(context, timer.phase)
-        TimerService.stop(context)
+        if (isForeignActive(timer, store.deviceId()) || timer.status != TimerStatus.RUNNING || timer.mode != Mode.COUNTDOWN) return
+        if (elapsed(timer) < timer.duration) {
+            Reminders.sync(context, timer)
+            return
+        }
+        TimerCompletion.complete(context)
     }
 }

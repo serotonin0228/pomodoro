@@ -1,12 +1,16 @@
 package com.pomodorotimer.app.domain
 
 /** Preserve both histories; keep the most recently changed timer/settings as a consistent unit. */
-fun mergeWorkspace(local: AppState, remote: AppState): AppState {
-    val pristine = local.records.isEmpty() && local.settings == Settings.Default &&
+fun mergeWorkspace(local: AppState, remote: AppState, allowPristine: Boolean = true): AppState {
+    val pristine = allowPristine && local.records.isEmpty() && local.settings == Settings.Default &&
         local.timer.status == TimerStatus.IDLE && local.timer.mode == Mode.COUNTDOWN && local.round == 0 && local.segments.isEmpty()
     val base = if (pristine || remote.updatedAt > local.updatedAt) remote else local
     return base.copy(records = mergeRecords(local.records, remote.records))
 }
+
+/** Local edits made since the last acknowledged revision win, while both histories survive. */
+fun mergePendingWorkspace(local: AppState, remote: AppState): AppState =
+    local.copy(records = mergeRecords(local.records, remote.records))
 
 /** An active session belongs to exactly one device. Older sessions without an owner stay usable. */
 fun isForeignActive(timer: TimerSession, device: String): Boolean =

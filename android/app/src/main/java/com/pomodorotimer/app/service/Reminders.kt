@@ -8,7 +8,8 @@ import android.os.Build
 import com.pomodorotimer.app.domain.Mode
 import com.pomodorotimer.app.domain.TimerSession
 import com.pomodorotimer.app.domain.TimerStatus
-import com.pomodorotimer.app.domain.elapsed
+import com.pomodorotimer.app.domain.Clock
+import com.pomodorotimer.app.domain.countdownDeadline
 
 /**
  * Exact "time is up" alarm.
@@ -25,9 +26,7 @@ object Reminders {
     fun sync(context: Context, timer: TimerSession) {
         cancel(context)
         if (timer.status != TimerStatus.RUNNING || timer.mode != Mode.COUNTDOWN) return
-        timer.startedAt ?: return
-        val left = (timer.duration - elapsed(timer)).coerceAtLeast(0)
-        val triggerAt = System.currentTimeMillis() + left * 1000
+        val triggerAt = countdownDeadline(timer, Clock.correction()) ?: return
 
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val pending = pendingIntent(context)

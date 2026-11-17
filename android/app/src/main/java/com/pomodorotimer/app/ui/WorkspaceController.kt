@@ -15,6 +15,7 @@ import com.pomodorotimer.app.domain.mergeRemoteTimer
 import com.pomodorotimer.app.domain.claimTimer
 import com.pomodorotimer.app.domain.rebaseRunningTimer
 import com.pomodorotimer.app.domain.mergeWorkspace
+import com.pomodorotimer.app.domain.mergePendingWorkspace
 import org.json.JSONObject
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import com.pomodorotimer.app.data.MusicCoordinator
 import com.pomodorotimer.app.focus.FocusGuardStore
 import com.pomodorotimer.app.service.Reminders
 import com.pomodorotimer.app.service.TimerService
+import com.pomodorotimer.app.service.TimerCompletion
 
 enum class WorkspaceTab { TIMER, STATS, SETTINGS }
 enum class CloudSyncStatus { OFFLINE, PENDING, SYNCING, SYNCED, ERROR }
@@ -263,13 +265,14 @@ class WorkspaceController(context: Context) {
                     val merged = when {
                         remote == null -> local
                         adoptRemote -> mergeRemoteTimer(local, remote.state, pendingLocal)
-                        else -> mergeWorkspace(local, remote.state)
+                        pendingLocal && !remoteChanged -> mergePendingWorkspace(local, remote.state)
+                        else -> mergeWorkspace(local, remote.state, allowPristine = !pendingLocal)
                     }
                     val saved = if (remote == null || merged != remote.state)
                         client.save(session, merged, remote?.revision ?: 0L, device) else remote
                     if (prefs.getString("session", null) != raw) return
                     val result = if (generation == localGeneration) saved.state
-                        else mergeWorkspace(state, saved.state)
+                        else mergePendingWorkspace(state, saved.state)
                     acceptSynced(result, saved.state, saved.revision)
                     return
                 } catch (_: CloudClient.ConflictException) {
@@ -340,7 +343,7 @@ class WorkspaceController(context: Context) {
     /** Reloads the workspace after a notification action changed it behind the screen. */
     fun refresh() {
         val loaded = store.load(account)?.state ?: return
-        if (loaded.updatedAt != state.updatedAt) {
+        if (loaded != state) {
             state = loaded
             pendingLocal = true
             localGeneration++
@@ -352,22 +355,14 @@ class WorkspaceController(context: Context) {
         val timer = state.timer
         if (isRemoteActive) { advanceAt = null; return }
 
-        if (timer.status == TimerStatus.RUNNING &&
-            timer.mode == Mode.COUNTDOWN &&
-            elapsed(timer, now) >= timer.duration
-        ) {
-            val finished = finishState(state, now, completed = true)
-            val autoNext = if (timer.phase == Phase.FOCUS) state.settings.autoBreak else state.settings.autoFocus
-            advanceAt = if (autoNext) now + AUTO_ADVANCE_DELAY_MS else null
-            commit(finished)
-            toast = if (timer.phase == Phase.FOCUS) "专注完成" else "休息结束"
-            return
-        }
-
-        val due = advanceAt
-        if (due != null && now >= due) {
-            advanceAt = null
-            advance(if (state.timer.phase == Phase.FOCUS) Phase.BREAK else Phase.FOCUS, start = true)
+        if (timer.status == TimerStatus.RUNNING && timer.mode == Mode.COUNTDOWN && elapsed(timer, now) >= timer.duration) {
+            // Notification actions and the alarm can update disk while the activity is backgrounded.
+            val persisted = store.load(account)?.state
+            if (persisted != null && persisted != state) { refresh(); return }
+            if (TimerCompletion.complete(appContext, now)) {
+                refresh()
+                toast = if (timer.phase == Phase.FOCUS) "专注完成" else "休息结束"
+            }
         }
     }
 
@@ -412,7 +407,4 @@ class WorkspaceController(context: Context) {
         }
     }
 
-    private companion object {
-        const val AUTO_ADVANCE_DELAY_MS = 1200L
-    }
 }

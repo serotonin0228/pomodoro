@@ -105,7 +105,10 @@ fun MusicCard(controller: WorkspaceController) {
         if (localPath(track) != null && queue != null) {
             controller.updateSettings { it.copy(musicTrackId = track.id) }
             val index = queue.trackIds.indexOf(track.id)
-            if (index >= 0 && index < queue.paths.size) MusicService.play(context, queue.paths, queue.titles, index)
+            if (index >= 0 && index < queue.paths.size) {
+                if (MusicPlayback.path == queue.paths[index] && !MusicPlayback.playing) MusicService.resume(context)
+                else MusicService.play(context, queue.paths, queue.titles, index)
+            }
         } else {
             val current = loadCloudSession(context)
             if (current == null) { status = text.syncLocalOnly; return }

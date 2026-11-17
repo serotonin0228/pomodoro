@@ -65,4 +65,15 @@ class WorkspaceMergeTest {
         assertEquals(95_000L, corrected.timer.startedAt)
         assertEquals(corrected, rebaseRunningTimer(corrected, "another-session", -5_000, 0))
     }
+    @Test fun pendingLocalEndIsNotOverwrittenByPristineHeuristic() {
+        val local = initialState("local", 10000)
+        val oldRemote = initialState("local", 1000).let { it.copy(timer = it.timer.copy(status = TimerStatus.RUNNING, startedAt = 1000)) }
+        assertEquals(local.timer, mergeWorkspace(local, oldRemote, allowPristine = false).timer)
+    }
+    @Test fun pendingLocalChangesSurviveACloudSnapshotWithLaterTimestamp() {
+        val local = initialState("local", 1000).copy(settings = Settings.Default.copy(focusMinutes = 30))
+        val oldCloud = initialState("local", 5000)
+        assertEquals(local.settings, mergePendingWorkspace(local, oldCloud).settings)
+        assertEquals(local.timer, mergePendingWorkspace(local, oldCloud).timer)
+    }
 }
