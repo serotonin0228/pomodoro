@@ -1,149 +1,59 @@
 <p align="center">
-  <img src="assets/icon.png" alt="Pomodoro icon" width="96" />
+  <img src="android/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="Pomodoro app icon" width="88">
 </p>
 
 <h1 align="center">Pomodoro</h1>
 
-<p align="center">
-  A focused, minimal timer for everyday work and study.
-</p>
+<p align="center">A native Android focus timer with a quiet interface and room to make it your own.</p>
 
 <p align="center">
-  <a href="README.zh-CN.md">简体中文</a> ·
-  <a href="#getting-started">Getting started</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="LICENSE">MIT license</a>
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="#build-for-android">Build for Android</a>
 </p>
 
+Pomodoro is built with **Kotlin**, **Jetpack Compose**, and **Miuix**. You can start a timer and keep a focus history on your device without creating an account. The app supports English and Simplified Chinese, light and dark themes, and phone and tablet layouts.
 
-## Android 原生重写版（Kotlin + Compose + Miuix）
+## Focus at your own pace
 
-本项目的原生重写版位于 [`android/`](android/README.md)：Kotlin + Jetpack Compose + Miuix 组件，包含计时、统计与记录管理、背景音乐与后台播控、通知与前台服务、应用限制、云同步及中英文。原 RN 代码保持不变，可对照阅读。
+Choose a countdown for a planned session or a stopwatch when you want to keep going. Set the lengths of focus sessions and short and long breaks, or let the next phase start automatically. During focus, an optional blocklist or allowlist can return you to Pomodoro when you open a restricted app. App limits require Android accessibility access.
 
-> 构建需要 JDK 21、Gradle 9.5 与 Android SDK 37，详见 [`android/README.md`](android/README.md)。
+<p align="center">
+  <a href="docs/screenshots/android/timer.png"><img src="docs/screenshots/android/timer.png" alt="Light mode countdown" width="228"></a>
+  &nbsp;
+  <a href="docs/screenshots/android/timer-zh-dark.png"><img src="docs/screenshots/android/timer-zh-dark.png" alt="Dark mode countdown in Simplified Chinese" width="228"></a>
+</p>
 
----
+<p align="center"><sub>Screenshots from Android v1.0.10 (Miuix). Focus history and music titles use sample data.</sub></p>
 
-Pomodoro is a cross-platform focus timer built with **React Native**, **Expo**, and **TypeScript**. It combines configurable focus sessions, a distraction-free interface, activity insights, and optional cloud synchronization. The timer and local history work without an account.
+## See where your time went
 
-## Screenshots
+Review your focus time by day, week, or month. The charts show how much time you spent and when, while the focus calendar lets you find records for a specific date. Set a goal in minutes or sessions and manage individual entries in your history.
 
-Screenshots are from the web version at a phone-sized viewport.
+<p align="center">
+  <a href="docs/screenshots/android/statistics.png"><img src="docs/screenshots/android/statistics.png" alt="Focus statistics" width="228"></a>
+  &nbsp;
+  <a href="docs/screenshots/android/calendar.png"><img src="docs/screenshots/android/calendar.png" alt="Focus calendar" width="228"></a>
+</p>
 
-| Timer | Statistics | Goals |
-|:---:|:---:|:---:|
-| ![Timer](docs/screenshots/timer.png) | ![Statistics](docs/screenshots/statistics.png) | ![Goals](docs/screenshots/goals.png) |
+## Make it your workspace
 
-## Features
+Open background music from the timer screen. Download individual tracks from a configured cloud library, then play them offline in repeat-one, sequential, or shuffle mode. Optional cloud sync lets you follow an active timer on another device and take it over from its current position.
 
-- **Flexible sessions** — Count down or count up; pause, resume, save, or discard a session. Configure focus time, short and long breaks, and automatic cycles.
-- **Focus insights** — Browse daily, weekly, and monthly activity, set a daily target, review your session history, and export records as CSV.
-- **Ambient audio** — Download music from your account’s cloud catalog, track download progress and updates, and play cached audio offline using a native background queue. See [music library management](docs/music-library.md).
-- **Personalized appearance** — Light and dark themes, English and Simplified Chinese, and layouts for phones and tablets.
-- **Local-first storage** — Keep guest sessions on-device using AsyncStorage. An account is not required for core timer features.
-- **Optional sync** — Connect your own Supabase project for email authentication, multi-device synchronization, and explicit conflict handling.
-- **Platform notifications** — Local completion reminders and an Android foreground timer service with pause/resume controls.
+<p align="center">
+  <a href="docs/screenshots/android/music.png"><img src="docs/screenshots/android/music.png" alt="Background music" width="228"></a>
+  &nbsp;
+  <a href="docs/screenshots/android/settings.png"><img src="docs/screenshots/android/settings.png" alt="Settings" width="228"></a>
+</p>
 
-- **App limits (Android)** — A local blocklist or allowlist returns restricted apps to Pomodoro during focus sessions. Requires user-enabled accessibility access. Pauses, breaks and deadlines release restrictions; phone, launcher and system settings stay available. See [implementation and limits](docs/app-limits.md).
+## Build for Android
 
-## Getting started
-
-### Requirements
-
-- Node.js **22.13+**
-- npm
-- For Android builds: Android SDK and a configured Android development environment
-- For iOS builds: macOS and Xcode
-
-### Install and run
+The current app lives in [`android/`](android/). Building it requires **JDK 21**, **Gradle 9.5**, and **Android SDK Platform 37**. The minimum supported device version is Android 8.0 (API 26).
 
 ```bash
-git clone https://github.com/serotonin0228/pomodoro.git
-cd pomodoro
-npm ci
-npm run web
+cd android
+gradle :app:assembleDebug
+gradle :app:testDebugUnitTest
 ```
 
-For the Expo development server, use `npm start`.
+For setup, build signing, and optional Supabase configuration, see the [Android build guide](android/README.md). The earlier React Native and Expo implementation remains in the repository for reference.
 
-### Native development
-
-```bash
-# Android
-npm run android
-
-# iOS — requires macOS and Xcode
-npm run ios
-```
-
-Expo generates the native projects from `app.json` and the configuration plugins in `plugins/`. Native functionality requires a development build; a browser preview cannot reproduce Android foreground-service behavior, system notifications, or all platform-specific visual effects.
-
-## Optional cloud synchronization
-
-Cloud features are disabled unless Supabase credentials are configured. Local timer functionality does not depend on Supabase.
-
-1. Create a Supabase project.
-2. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL Editor to create the workspace table, policies, and RPC functions.
-3. Copy `.env.example` to `.env` and set the public project URL and publishable key:
-   ```dotenv
-   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-public-publishable-key
-   ```
-4. Enable email authentication in Supabase and configure your confirmation email and redirect settings.
-5. Restart the application.
-
-The database enables row-level security and optimistic concurrency control. Guest and authenticated workspaces are stored separately; signing in does not automatically merge guest history.
-
-**Security:** Never commit a service-role key, database password, signing credentials, or a populated `.env` file.
-
-## Development
-
-| Command | Description |
-| --- | --- |
-| `npm start` | Start the Expo development server |
-| `npm run web` | Start the web development server |
-| `npm run android` | Build and run on Android |
-| `npm run ios` | Build and run on iOS |
-| `npm run lint` | Run ESLint through Expo |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm test` | Run model and localization tests |
-| `npm run build` | Export the web application |
-| `npm run test:e2e` | Run Playwright browser tests |
-
-The end-to-end suite expects the exported web app at `http://127.0.0.1:8081`:
-
-```bash
-npm run build
-python3 -m http.server 8081 --directory dist
-# In a second terminal:
-npm run test:e2e
-```
-
-Playwright uses `/usr/bin/chromium` by default. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if Chromium is installed elsewhere.
-
-## Project structure
-
-```text
-App.tsx              Application shell and interactions
-src/                 Timer logic, views, persistence, and localization
-plugins/             Expo configuration and Android native integration
-assets/              Icons and bundled audio
-supabase/            Database schema and verification queries
-tests/               Unit and browser tests
-scripts/             Development and packaging utilities
-```
-
-## Platform notes
-
-- Android provides a foreground timer service and attempts to request Live Updates on supported systems. Status-bar presentation depends on the device, OS, and notification settings.
-- iOS uses local completion notifications; Live Activities and Dynamic Island integration are not implemented.
-- Background execution, audio behavior, and notification presentation should be verified on physical devices.
-- No hosted synchronization service or prebuilt app download is provided by this repository.
-
-## Contributing
-
-Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and contribution guidelines.
-
-## License
-
-The application source code is available under the [MIT License](LICENSE). The selected background tracks are supplied by the user for their personal build; they are not covered by the source code license. Original Expo template notices are retained in [NOTICE](NOTICE).
+Contributions are welcome. See the [contribution guide](CONTRIBUTING.md) and [MIT license](LICENSE).
