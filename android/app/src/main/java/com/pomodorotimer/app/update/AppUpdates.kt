@@ -15,29 +15,19 @@ import java.net.URL
 
 internal data class AppUpdate(val version: String, val url: String, val size: Long)
 
-private const val PROJECT = "serotonin0228/pomodoro"
+private const val DOWNLOADS = "https://raw.githubusercontent.com/serotonin0228/pomodoro/apk-distribution"
 private const val MAX_APK_SIZE = 150L * 1024 * 1024
 
 internal object AppUpdates {
     suspend fun latest(installedVersion: String): AppUpdate? = withContext(Dispatchers.IO) {
-        connect("https://api.github.com/repos/$PROJECT/releases/latest") { connection ->
+        connect("$DOWNLOADS/latest.json") { connection ->
             if (connection.responseCode == 404) return@connect null
             check(connection.responseCode == 200)
-            val release = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            if (release.optBoolean("draft") || release.optBoolean("prerelease")) return@connect null
-            val version = release.optString("tag_name").removePrefix("v")
-            if (!isNewerVersion(version, installedVersion)) return@connect null
-            val filename = "pomodoro-v$version-arm64-v8a.apk"
-            val downloadUrl = "https://github.com/$PROJECT/releases/download/v$version/$filename"
-            val assets = release.getJSONArray("assets")
-            for (index in 0 until assets.length()) {
-                val asset = assets.getJSONObject(index)
-                val size = asset.optLong("size")
-                if (asset.optString("name") == filename && asset.optString("state") == "uploaded" &&
-                    asset.optString("browser_download_url") == downloadUrl && size in 1..MAX_APK_SIZE
-                ) return@connect AppUpdate(version, downloadUrl, size)
-            }
-            null
+            val manifest = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            val version = manifest.getString("version")
+            val size = manifest.getLong("size")
+            if (!isNewerVersion(version, installedVersion) || size !in 1..MAX_APK_SIZE) return@connect null
+            AppUpdate(version, "$DOWNLOADS/pomodoro-v$version-arm64-v8a.apk", size)
         }
     }
 

@@ -37,4 +37,6 @@ gradle :app:testDebugUnitTest
 
 ## 发布应用内更新
 
-提高 `versionCode` 并将 `versionName` 设置为三段数字版本号。使用与上一版相同的签名构建 arm64-v8a APK。在 GitHub 创建对应的 `v<versionName>` Release，把 APK 以 `pomodoro-v<versionName>-arm64-v8a.apk` 的名称作为资产上传，再将 Release 发布为最新正式版。仅推送代码或打 tag 不会触发更新提醒。
+1. 提高 `versionCode`，并将 `versionName` 设置为三段数字。使用与上一版相同的签名构建 arm64-v8a APK。
+2. 将签名后的 APK 以 `pomodoro-v<versionName>-arm64-v8a.apk` 的名称放入 `apk-distribution` 分支根目录。更新同目录下的 `latest.json`，格式为 `{"version":"1.0.11","size":123456}`，其中 `size` 是 APK 的实际字节数。将 APK 和清单放在同一次提交中发布；已发布的旧文件可保留，供历史 Release 下载。
+3. 建立对应的 GitHub Release，并链接该版本的 APK。应用在启动时读取下载分支的清单，因此仅推送源代码或建立 tag 不会触发提醒。
