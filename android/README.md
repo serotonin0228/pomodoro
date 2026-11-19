@@ -33,3 +33,8 @@ gradle :app:testDebugUnitTest
 - `app/src/main/java/com/pomodorotimer/app/focus`：应用限制策略和辅助功能服务。
 
 线性图标来自 Lucide，许可文本见 `app/src/main/assets/licenses/lucide-isc.txt`。真实设备的后台播放、系统权限与电池管理行为需要在对应设备上验证。
+
+
+## 发布应用内更新
+
+提高 `versionCode` 并将 `versionName` 设置为三段数字版本号。使用与上一版相同的签名构建 arm64-v8a APK。在 GitHub 创建对应的 `v<versionName>` Release，把 APK 以 `pomodoro-v<versionName>-arm64-v8a.apk` 的名称作为资产上传，再将 Release 发布为最新正式版。仅推送代码或打 tag 不会触发更新提醒。

@@ -44,6 +44,10 @@
   <a href="docs/screenshots/android/settings.png"><img src="docs/screenshots/android/settings.png" alt="设置" width="228"></a>
 </p>
 
+## 安装和更新
+
+在 [GitHub Releases](https://github.com/serotonin0228/pomodoro/releases/latest) 下载签名版 arm64 APK。从 v1.0.11 开始，应用启动时会检查正式更新，并可在应用内下载 APK。首次通过番茄钟安装时，Android 会要求允许此来源，每次安装仍需在系统弹窗中确认。
+
 ## 构建 Android 版
 
 当前应用源码位于 [`android/`](android/)。构建需要 **JDK 21**、**Gradle 9.5** 和 **Android SDK Platform 37**，最低支持 Android 8.0（API 26）。

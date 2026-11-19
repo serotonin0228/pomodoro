@@ -12,6 +12,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import com.pomodorotimer.app.domain.ThemeMode
+import com.pomodorotimer.app.domain.Language
+import com.pomodorotimer.app.update.UpdatePrompt
 import com.pomodorotimer.app.service.TimerActionReceiver
 import com.pomodorotimer.app.service.MusicService
 import com.pomodorotimer.app.ui.AppShell
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalUiText provides uiText(language)) {
                 PomodoroTheme(themeMode = workspace.state.settings.theme) {
                     AppShell(controller = workspace)
+                    UpdatePrompt(english = language == Language.EN)
                 }
             }
         }

@@ -44,6 +44,10 @@ Open background music from the timer screen. Download individual tracks from a c
   <a href="docs/screenshots/android/settings.png"><img src="docs/screenshots/android/settings.png" alt="Settings" width="228"></a>
 </p>
 
+## Install and update
+
+Download the signed arm64 APK from [GitHub Releases](https://github.com/serotonin0228/pomodoro/releases/latest). Starting with v1.0.11, the app checks for stable updates on launch and can download the APK in-app. Android asks for permission to install from this source the first time and confirms each installation.
+
 ## Build for Android
 
 The current app lives in [`android/`](android/). Building it requires **JDK 21**, **Gradle 9.5**, and **Android SDK Platform 37**. The minimum supported device version is Android 8.0 (API 26).
