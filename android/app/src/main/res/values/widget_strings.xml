@@ -2,4 +2,8 @@
     <string name="widget_focus_timer">Focus timer</string>
     <string name="widget_focus_calendar">Focus calendar</string>
     <string name="widget_focus_stats">Focus statistics</string>
+    <string name="widget_preview_start">Start</string>
+    <string name="widget_stats_today_label">Today</string>
+    <string name="widget_stats_week_label">This week</string>
+    <string name="widget_default_time" translatable="false">00:00</string>
 </resources>

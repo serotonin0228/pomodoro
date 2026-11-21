@@ -2,4 +2,7 @@
     <string name="widget_focus_timer">专注计时</string>
     <string name="widget_focus_calendar">专注日历</string>
     <string name="widget_focus_stats">专注统计</string>
+    <string name="widget_preview_start">开始</string>
+    <string name="widget_stats_today_label">今日专注</string>
+    <string name="widget_stats_week_label">本周专注</string>
 </resources>
