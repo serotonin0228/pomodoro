@@ -34,7 +34,21 @@ jobs:
           export JAVA_HOME="$JAVA_HOME_21_X64"
           printf 'JAVA_HOME=%s\n' "$JAVA_HOME" >> "$GITHUB_ENV"
           printf '%s\n' "$JAVA_HOME/bin" >> "$GITHUB_PATH"
-          sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$RUNNER_TEMP/android-sdk}}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          printf 'ANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' "$ANDROID_HOME" "$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager" ]]; then
+            tools_archive="$RUNNER_TEMP/android-cmdline-tools.zip"
+            curl -fsSL --retry 2 -o "$tools_archive" \
+              https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip
+            printf 'e025545c62a8e64c7559119566a569fb1dec5f60  %s\n' "$tools_archive" | sha1sum --check
+            unzip -q "$tools_archive" -d "$RUNNER_TEMP/android-cmdline-tools"
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            sdkmanager="$RUNNER_TEMP/android-cmdline-tools/cmdline-tools/bin/sdkmanager"
+          fi
+          (set +o pipefail; yes | "$sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null)
+          "$sdkmanager" --sdk_root="$ANDROID_HOME" "platforms;android-37.0" "build-tools;37.0.0"
           cd "$RUNNER_TEMP"
           curl -fsSL --retry 2 -o gradle.zip https://services.gradle.org/distributions/gradle-9.5.0-bin.zip
           echo "553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746  gradle.zip" | sha256sum --check

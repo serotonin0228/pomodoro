@@ -4,17 +4,14 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:pathData="M54,28 A26,26 0,1 0,78.43,45.11"
-        android:strokeColor="@color/ic_launcher_blue"
-        android:strokeWidth="5.8"
-        android:strokeLineCap="round" />
-    <path
-        android:pathData="M54,39.5 L54,54 L65.5,61"
-        android:strokeColor="@color/ic_launcher_blue"
-        android:strokeWidth="5.4"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
         android:fillColor="@color/ic_launcher_blue"
-        android:pathData="M62.8,38.2 C63.6,31.7 68.4,28.1 75.4,28.3 C74.9,35.2 70,39.8 62.8,38.2 Z" />
+        android:fillType="evenOdd"
+        android:pathData="M54,25 A29,29 0,1 1,54,83 A29,29 0,1 1,54,25 Z
+                          M52,39 A2,2 0,0 1,56,39 L56,52.85 L66.05,59.05
+                          A2,2 0,0 1,63.95,62.45 L52.95,55.7
+                          A2,2 0,0 1,52,54 Z
+                          M61.5,45.5 C61.7,39.2 65.7,35.5 72.5,35.5
+                          C72.1,41.9 68.1,46.2 61.5,45.5 Z
+                          M63.7,43.6 C67.1,43.5 69.4,41.1 70.2,37.7
+                          C66.5,38.3 64.4,40.2 63.7,43.6 Z" />
 </vector>
