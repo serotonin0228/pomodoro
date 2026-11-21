@@ -24,7 +24,7 @@ class FocusGuardService : AccessibilityService() {
   private var observedWall = 0L
   private var usageAt = 0L
   private var redirectedAt = -2000L
-  private var launchPending: Runnable? = null
+  private var homeFallback: Runnable? = null
   private val preferences by lazy { FocusGuardStore.prefs(this) }
   private val focusChanges = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
     if (key == "status" || key == "enabled" || key == "deadline" || key == "phase" || key == null) restartTicker()
@@ -71,6 +71,10 @@ class FocusGuardService : AccessibilityService() {
     if (pkg.isBlank()) return
     foreground = pkg; observedAt = SystemClock.elapsedRealtime(); observedWall = at
     FocusGuardDiagnostics.lastSeen = pkg
+    if (pkg == packageName) {
+      homeFallback?.let { handler.removeCallbacks(it) }
+      homeFallback = null
+    }
   }
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event == null || event.eventType !in listOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_VIEW_FOCUSED)) return
@@ -86,22 +90,32 @@ class FocusGuardService : AccessibilityService() {
     if (!FocusGuardPolicy.shouldBlock(foreground, p.getString("mode", "blacklist") ?: "blacklist",
         p.getStringSet("blocked", emptySet()) ?: emptySet(), p.getStringSet("allowed", emptySet()) ?: emptySet(), launchable, essential)) return
     redirectedAt = now
-    FocusGuardDiagnostics.lastMatched = foreground
+    val restrictedPackage = foreground
+    FocusGuardDiagnostics.lastMatched = restrictedPackage
     FocusGuardDiagnostics.lastError = ""
-    // Android can silently deny bringing a background Activity to the front. HOME first ensures
-    // the restricted app is left even on such devices; launch Pomodoro after the transition.
-    FocusGuardDiagnostics.lastHome = performGlobalAction(GLOBAL_ACTION_HOME)
-    val launch = Runnable {
-      launchPending = null
-      if (!FocusGuardStore.isActive(this) || !interactive()) return@Runnable
-      try {
-        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
-        FocusGuardDiagnostics.returns++
-      } catch (e: Exception) { FocusGuardDiagnostics.lastError = e.javaClass.simpleName }
+    FocusGuardDiagnostics.lastHome = false
+
+    // A successful launch takes the user straight to the timer. If the system leaves the
+    // restricted app in front, HOME still lets the accessibility service leave that app.
+    try {
+      startActivity(
+        Intent(this, MainActivity::class.java)
+          .setAction(MainActivity.ACTION_RETURN_TO_TIMER)
+          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+      )
+    } catch (e: Exception) {
+      FocusGuardDiagnostics.lastError = e.javaClass.simpleName
     }
-    launchPending?.let { handler.removeCallbacks(it) }
-    launchPending = launch
-    handler.postDelayed(launch, 180)
+
+    val fallback = Runnable {
+      homeFallback = null
+      if (foreground == restrictedPackage && FocusGuardStore.isActive(this) && interactive()) {
+        FocusGuardDiagnostics.lastHome = performGlobalAction(GLOBAL_ACTION_HOME)
+      }
+    }
+    homeFallback?.let { handler.removeCallbacks(it) }
+    homeFallback = fallback
+    handler.postDelayed(fallback, 650)
   }
   override fun onInterrupt() { }
   override fun onDestroy() {

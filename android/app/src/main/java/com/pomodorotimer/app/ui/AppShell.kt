@@ -89,6 +89,10 @@ fun AppShell(
         }
     }
 
+    LaunchedEffect(controller.tab) {
+        if (controller.tab != WorkspaceTab.SETTINGS) showAbout = false
+    }
+
     if (showAbout && controller.tab == WorkspaceTab.SETTINGS) {
         BackHandler { showAbout = false }
         AboutScreen(onBack = { showAbout = false })

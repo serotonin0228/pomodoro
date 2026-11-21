@@ -20,6 +20,7 @@ import com.pomodorotimer.app.ui.WorkspaceTab
 import com.pomodorotimer.app.domain.ThemeMode
 import com.pomodorotimer.app.domain.Language
 import com.pomodorotimer.app.update.UpdatePrompt
+import com.pomodorotimer.app.focus.FocusGuardDiagnostics
 import com.pomodorotimer.app.service.TimerActionReceiver
 import com.pomodorotimer.app.service.MusicService
 import com.pomodorotimer.app.ui.AppShell
@@ -35,7 +36,12 @@ import android.os.Build
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        internal const val ACTION_RETURN_TO_TIMER = "com.pomodorotimer.app.action.RETURN_TO_TIMER"
+    }
+
     private var controller: WorkspaceController? = null
+    private var openTimerWhenReady = false
 
     private val stateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -45,11 +51,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openTimerWhenReady = intent.action == ACTION_RETURN_TO_TIMER
         val filter = IntentFilter(TimerActionReceiver.ACTION_STATE_CHANGED)
         ContextCompat.registerReceiver(this, stateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         setContent {
             val workspace = remember { WorkspaceController(applicationContext) }
-            SideEffect { controller = workspace }
+            SideEffect {
+                controller = workspace
+                if (openTimerWhenReady) showTimer(workspace)
+            }
 
             val systemDark = isSystemInDarkTheme()
             val dark = workspace.state.settings.theme == ThemeMode.DARK ||
@@ -95,6 +105,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ACTION_RETURN_TO_TIMER) {
+            val workspace = controller
+            if (workspace == null) openTimerWhenReady = true else showTimer(workspace)
+        }
+    }
+
+    private fun showTimer(workspace: WorkspaceController) {
+        openTimerWhenReady = false
+        workspace.tab = WorkspaceTab.TIMER
+        FocusGuardDiagnostics.returns++
     }
 
     override fun onResume() {
