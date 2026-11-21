@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Bold flat blue pomodoro timer icon with uniformly thick ring">
+  <title>Pomodoro Timer — bold uniform vector</title>
+  <!-- Full-bleed square white background. -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <!-- Exact concentric contours: center=(512,551), R=326, r=186. Uniform ring width=140. -->
+  <path fill="#3482FF" fill-rule="evenodd"
+        d="M 186 551 A 326 326 0 1 0 838 551 A 326 326 0 1 0 186 551 Z
+           M 326 551 A 186 186 0 1 1 698 551 A 186 186 0 1 1 326 551 Z"/>
+  <!-- Progress section with matching center and radii; precisely aligned at nine o'clock. -->
+  <path fill="#B6D0FF"
+        d="M 186 551 A 326 326 0 0 1 540.4128 226.2405
+           L 528.2101 365.7078 A 186 186 0 0 0 326 551 Z"/>
+  <!-- Heavier clock hands: 92-unit stroke, rounded ends, adjusted length for even negative space. -->
+  <path d="M 512 437 L 512 551 L 605 617" fill="none"
+        stroke="#3482FF" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Retained solid leaf and clean white negative-space separator. -->
+  <path d="M 463 318 C 471 252 522 192 585 163 C 629 143 669 138 702 139 C 704 212 674 280 623 317 C 568 357 511 353 463 318 Z"
+        fill="#3482FF" stroke="#FFFFFF" stroke-width="10" stroke-linejoin="round"/>
+</svg>
