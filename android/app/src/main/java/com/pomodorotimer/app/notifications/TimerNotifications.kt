@@ -9,21 +9,14 @@ import androidx.core.app.NotificationCompat
 import com.pomodorotimer.app.MainActivity
 import com.pomodorotimer.app.R
 import com.pomodorotimer.app.domain.Language
-import com.pomodorotimer.app.domain.Mode
 import com.pomodorotimer.app.domain.Phase
 import com.pomodorotimer.app.domain.TimerSession
 import com.pomodorotimer.app.domain.TimerStatus
 import com.pomodorotimer.app.domain.clock
-import com.pomodorotimer.app.domain.countdownDeadline
 import com.pomodorotimer.app.domain.displaySeconds
 import com.pomodorotimer.app.service.TimerActionReceiver
 
-/**
- * Builds the ongoing countdown notification and the completion notification.
- *
- * The countdown is rendered by the system chronometer against the absolute end timestamp, so the
- * notification stays correct even while the app process is frozen.
- */
+/** Builds the foreground timer card and the completion notification. */
 object TimerNotifications {
 
     const val ONGOING_ID = 1001
@@ -45,6 +38,7 @@ object TimerNotifications {
             .setColor(Color.BLACK)
             .setContentTitle(title)
             .setContentText(value)
+            .setShortCriticalText(value)
             .setContentIntent(openApp(context))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -53,16 +47,6 @@ object TimerNotifications {
             .setRequestPromotedOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
-
-        val chronometer = notificationChronometerTime(timer, now, System.currentTimeMillis())
-        if (chronometer != null) {
-            builder.setShowWhen(true)
-                .setUsesChronometer(true)
-                .setChronometerCountDown(timer.mode == Mode.COUNTDOWN)
-                .setWhen(chronometer)
-        } else {
-            builder.setShortCriticalText(value)
-        }
 
         if (running) {
             builder.addAction(action(context, TimerActionReceiver.ACTION_PAUSE, label("暂停", "Pause"), 1, timer.id))
@@ -109,16 +93,4 @@ object TimerNotifications {
         )
         return NotificationCompat.Action.Builder(R.drawable.ic_stat_timer, label, pending).build()
     }
-}
-
-/** Converts a timer's corrected timestamp to the wall-clock base expected by Android System UI. */
-internal fun notificationChronometerTime(timer: TimerSession, now: Long, wallNow: Long): Long? {
-    if (timer.status != TimerStatus.RUNNING) return null
-    val start = timer.startedAt ?: return null
-    val anchor = if (timer.mode == Mode.COUNTDOWN) {
-        countdownDeadline(timer, 0L)?.takeIf { it > now } ?: return null
-    } else {
-        (start - timer.elapsed * 1000L).coerceAtMost(now)
-    }
-    return wallNow + (anchor - now)
 }
