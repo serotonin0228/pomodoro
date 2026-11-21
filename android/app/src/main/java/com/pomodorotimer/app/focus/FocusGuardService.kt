@@ -1,8 +1,6 @@
 package com.pomodorotimer.app.focus
 
 import android.accessibilityservice.AccessibilityService
-import com.pomodorotimer.app.MainActivity
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.KeyguardManager
 import android.content.Intent
 import android.content.SharedPreferences
@@ -11,10 +9,15 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
+import com.pomodorotimer.app.MainActivity
 
-/** Uses package names only. No view tree, screen text, screenshots, gestures, or network. */
+/** Resolves the foreground package from window metadata without traversing accessibility nodes. */
 class FocusGuardService : AccessibilityService() {
-  companion object { @Volatile var connected = false }
+  companion object {
+    private const val REDIRECT_RETRY_MS = 900L
+    @Volatile var connected = false
+  }
   private val handler = Handler(Looper.getMainLooper())
   private var launchable: Set<String> = emptySet()
   private var essential: Set<String> = emptySet()
@@ -23,7 +26,7 @@ class FocusGuardService : AccessibilityService() {
   private var observedAt = 0L
   private var observedWall = 0L
   private var usageAt = 0L
-  private var redirectedAt = -2000L
+  private var redirectedAt = -REDIRECT_RETRY_MS
   private var homeFallback: Runnable? = null
   private val preferences by lazy { FocusGuardStore.prefs(this) }
   private val focusChanges = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -34,11 +37,7 @@ class FocusGuardService : AccessibilityService() {
       if (!FocusGuardStore.isActive(this@FocusGuardService)) return
       try {
         if (interactive()) {
-          val now = System.currentTimeMillis()
-          FocusGuardUsage.latest(this@FocusGuardService, usageAt, now)?.let {
-            usageAt = it.at
-            if (it.at > observedWall) observe(it.packageName, it.at)
-          }
+          refreshForeground()
           enforce()
         }
       } catch (e: Exception) { FocusGuardDiagnostics.lastError = e.javaClass.simpleName }
@@ -47,11 +46,6 @@ class FocusGuardService : AccessibilityService() {
   }
   override fun onServiceConnected() {
     super.onServiceConnected()
-    serviceInfo = serviceInfo.apply {
-      eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_VIEW_FOCUSED
-      feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-      notificationTimeout = 50
-    }
     connected = true
     try { refreshApps() } catch (e: Exception) { FocusGuardDiagnostics.lastError = e.javaClass.simpleName }
     preferences.registerOnSharedPreferenceChangeListener(focusChanges)
@@ -67,28 +61,68 @@ class FocusGuardService : AccessibilityService() {
     cacheAt = SystemClock.elapsedRealtime()
   }
   private fun interactive() = getSystemService(PowerManager::class.java).isInteractive && !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+  private fun foregroundApplication(): String? {
+    val currentWindows = windows
+    val app = currentWindows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive }
+      ?: currentWindows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused }
+    return app?.root?.packageName?.toString()?.takeIf { it.isNotBlank() }
+  }
+
+  private fun refreshForeground() {
+    val pkg = foregroundApplication()
+    if (pkg != null) {
+      observe(pkg)
+      return
+    }
+    FocusGuardUsage.latest(this, usageAt, System.currentTimeMillis())?.let {
+      usageAt = it.at
+      if (it.at > observedWall) observe(it.packageName, it.at)
+    }
+  }
+
   private fun observe(pkg: String, at: Long = System.currentTimeMillis()) {
     if (pkg.isBlank()) return
-    foreground = pkg; observedAt = SystemClock.elapsedRealtime(); observedWall = at
-    FocusGuardDiagnostics.lastSeen = pkg
-    if (pkg == packageName) {
+    if (foreground != pkg) {
+      foreground = pkg
+      redirectedAt = -REDIRECT_RETRY_MS
       homeFallback?.let { handler.removeCallbacks(it) }
       homeFallback = null
     }
+    observedAt = SystemClock.elapsedRealtime()
+    observedWall = at
+    FocusGuardDiagnostics.lastSeen = pkg
   }
+
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    if (event == null || event.eventType !in listOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_VIEW_FOCUSED)) return
+    val type = event?.eventType ?: return
+    if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && type != AccessibilityEvent.TYPE_WINDOWS_CHANGED) return
+    if (!FocusGuardStore.isActive(this) || !interactive()) return
     FocusGuardDiagnostics.events++
-    try { observe(event.packageName?.toString() ?: return); enforce() }
-    catch (e: Exception) { FocusGuardDiagnostics.lastError = e.javaClass.simpleName }
+    try {
+      val pkg = foregroundApplication()
+        ?: event.packageName?.toString()?.takeIf { type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }
+        ?: return
+      observe(pkg)
+      enforce()
+    } catch (e: Exception) {
+      FocusGuardDiagnostics.lastError = e.javaClass.simpleName
+    }
   }
+
+  private fun isRestricted(pkg: String): Boolean = FocusGuardPolicy.shouldBlock(
+    pkg,
+    preferences.getString("mode", "blacklist") ?: "blacklist",
+    preferences.getStringSet("blocked", emptySet()) ?: emptySet(),
+    preferences.getStringSet("allowed", emptySet()) ?: emptySet(),
+    launchable,
+    essential,
+  )
+
   private fun enforce() {
     val now = SystemClock.elapsedRealtime()
-    if (!FocusGuardStore.isActive(this) || !interactive() || now - observedAt > 3000 || now - redirectedAt < 900) return
+    if (!FocusGuardStore.isActive(this) || !interactive() || now - observedAt > 3000 || now - redirectedAt < REDIRECT_RETRY_MS) return
     if (now - cacheAt > 30000) refreshApps()
-    val p = FocusGuardStore.prefs(this)
-    if (!FocusGuardPolicy.shouldBlock(foreground, p.getString("mode", "blacklist") ?: "blacklist",
-        p.getStringSet("blocked", emptySet()) ?: emptySet(), p.getStringSet("allowed", emptySet()) ?: emptySet(), launchable, essential)) return
+    if (!isRestricted(foreground)) return
     redirectedAt = now
     val restrictedPackage = foreground
     FocusGuardDiagnostics.lastMatched = restrictedPackage
@@ -109,8 +143,14 @@ class FocusGuardService : AccessibilityService() {
 
     val fallback = Runnable {
       homeFallback = null
-      if (foreground == restrictedPackage && FocusGuardStore.isActive(this) && interactive()) {
-        FocusGuardDiagnostics.lastHome = performGlobalAction(GLOBAL_ACTION_HOME)
+      if (!FocusGuardStore.isActive(this) || !interactive()) return@Runnable
+      try {
+        val pkg = foregroundApplication() ?: foreground
+        if (pkg == restrictedPackage && isRestricted(pkg)) {
+          FocusGuardDiagnostics.lastHome = performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+      } catch (e: Exception) {
+        FocusGuardDiagnostics.lastError = e.javaClass.simpleName
       }
     }
     homeFallback?.let { handler.removeCallbacks(it) }
