@@ -1,0 +1,53 @@
+name: Attach signed APK to Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, such as v1.0.11
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: attach-apk-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download and verify the signed APK
+        id: apk
+        env:
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          apk="pomodoro-$TAG-arm64-v8a.apk"
+          curl --fail --silent --show-error --location --retry 2 \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/apk-distribution/$apk" \
+            --output "$apk"
+          sdk_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          badging="$("$sdk_tools/aapt" dump badging "$apk")"
+          package_line="$(printf '%s\n' "$badging" | sed -n '/^package:/p')"
+          [[ "$package_line" == *"name='com.pomodorotimer.app'"* ]]
+          [[ "$package_line" == *"versionName='${TAG#v}'"* ]]
+          grep -Fxq "native-code: 'arm64-v8a'" <<< "$badging"
+          certs="$("$sdk_tools/apksigner" verify --print-certs "$apk")"
+          grep -Fq 'certificate SHA-256 digest: 7c6ea1887ecd021a9d75948bf627ab7bc0a00e0b4672d7ca14becbcfbb518663' <<< "$certs"
+          printf 'filename=%s\n' "$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the Release attachment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          APK: ${{ steps.apk.outputs.filename }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY"
