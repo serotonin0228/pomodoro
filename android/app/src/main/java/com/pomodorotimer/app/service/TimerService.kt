@@ -7,14 +7,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import com.pomodorotimer.app.data.WorkspaceStore
 import com.pomodorotimer.app.domain.isForeignActive
 import com.pomodorotimer.app.domain.Clock
+import com.pomodorotimer.app.domain.Language
 import com.pomodorotimer.app.domain.Phase
 import com.pomodorotimer.app.domain.Settings
 import android.media.RingtoneManager
+import com.pomodorotimer.app.domain.TimerSession
 import com.pomodorotimer.app.domain.TimerStatus
+import com.pomodorotimer.app.domain.countdownDeadline
 import com.pomodorotimer.app.notifications.NotificationChannels
 import com.pomodorotimer.app.notifications.TimerNotifications
 
@@ -26,25 +31,50 @@ import com.pomodorotimer.app.notifications.TimerNotifications
  */
 class TimerService : Service() {
 
+    private val notificationHandler = Handler(Looper.getMainLooper())
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        notificationHandler.removeCallbacksAndMessages(null)
         if (intent?.action == ACTION_STOP) {
             stopTimer()
             return START_NOT_STICKY
         }
 
         val store = WorkspaceStore(this)
-        val timer = store.loadActive()?.state?.timer
+        val workspace = store.loadActive()?.state
+        val timer = workspace?.timer
         if (timer == null || isForeignActive(timer, store.deviceId()) || (timer.status != TimerStatus.RUNNING && timer.status != TimerStatus.PAUSED)) {
             stopTimer()
             return START_NOT_STICKY
         }
 
         NotificationChannels.ensure(this)
-        startForegroundCompat(TimerNotifications.ongoing(this, timer, Clock.now()))
+        val language = workspace.settings.language
+        startForegroundCompat(TimerNotifications.ongoing(this, timer, Clock.now(), language))
+        if (timer.status == TimerStatus.RUNNING) refreshNotificationWhileRunning(timer, language)
         Reminders.sync(this, timer)
         return START_STICKY
+    }
+
+    private fun refreshNotificationWhileRunning(timer: TimerSession, language: Language) {
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val deadline = countdownDeadline(timer, 0L)
+        val update = object : Runnable {
+            override fun run() {
+                val now = Clock.now()
+                // Some System UI implementations display the subtitle without a live chronometer.
+                manager.notify(TimerNotifications.ONGOING_ID, TimerNotifications.ongoing(this@TimerService, timer, now, language))
+                if (deadline == null || now < deadline) notificationHandler.postDelayed(this, 1000L)
+            }
+        }
+        notificationHandler.postDelayed(update, 1000L)
+    }
+
+    override fun onDestroy() {
+        notificationHandler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     private fun startForegroundCompat(notification: Notification) {

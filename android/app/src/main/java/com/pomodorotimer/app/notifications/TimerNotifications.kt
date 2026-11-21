@@ -4,16 +4,17 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.Icon
+import androidx.core.app.NotificationCompat
 import com.pomodorotimer.app.MainActivity
 import com.pomodorotimer.app.R
+import com.pomodorotimer.app.domain.Language
 import com.pomodorotimer.app.domain.Mode
 import com.pomodorotimer.app.domain.Phase
 import com.pomodorotimer.app.domain.TimerSession
 import com.pomodorotimer.app.domain.TimerStatus
 import com.pomodorotimer.app.domain.clock
-import com.pomodorotimer.app.domain.elapsed
-import com.pomodorotimer.app.domain.remaining
+import com.pomodorotimer.app.domain.countdownDeadline
+import com.pomodorotimer.app.domain.displaySeconds
 import com.pomodorotimer.app.service.TimerActionReceiver
 
 /**
@@ -27,41 +28,46 @@ object TimerNotifications {
     const val ONGOING_ID = 1001
     const val FINISHED_ID = 1002
 
-    fun ongoing(context: Context, timer: TimerSession, now: Long): Notification {
-        NotificationChannels.ensure(context)
-        val phase = if (timer.phase == Phase.FOCUS) "专注" else "休息"
-        val running = timer.status == TimerStatus.RUNNING
+    fun ongoing(context: Context, timer: TimerSession, now: Long, language: Language): Notification {
+        fun label(zh: String, en: String) = if (language == Language.EN) en else zh
 
-        val builder = Notification.Builder(context, NotificationChannels.ONGOING)
+        val running = timer.status == TimerStatus.RUNNING
+        val title = when {
+            timer.phase == Phase.BREAK && running -> label("正在休息", "On a break")
+            timer.phase == Phase.BREAK -> label("休息已暂停", "Break paused")
+            running -> label("正在专注", "Focusing")
+            else -> label("专注已暂停", "Focus paused")
+        }
+        val value = clock(displaySeconds(timer, now))
+        val builder = NotificationCompat.Builder(context, NotificationChannels.ONGOING)
             .setSmallIcon(R.drawable.ic_stat_timer)
-            .setContentTitle(phase)
+            .setContentTitle(title)
+            .setContentText(value)
             .setContentIntent(openApp(context))
-            .setOngoing(running)
+            .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setRequestPromotedOngoing(true)
+            .setSilent(true)
             .setShowWhen(false)
 
-        if (running) {
+        val chronometer = notificationChronometerTime(timer, now, System.currentTimeMillis())
+        if (chronometer != null) {
             builder.setShowWhen(true)
-            if (timer.mode == Mode.COUNTDOWN) {
-                builder.setUsesChronometer(true)
-                builder.setChronometerCountDown(true)
-                builder.setWhen(System.currentTimeMillis() + remaining(timer, now) * 1000)
-                builder.setContentText("剩余 ${clock(remaining(timer, now))}")
-            } else {
-                builder.setUsesChronometer(true)
-                builder.setWhen(System.currentTimeMillis() - elapsed(timer, now) * 1000)
-                builder.setContentText("已专注 ${clock(elapsed(timer, now))}")
-            }
-            builder.addAction(
-                action(context, TimerActionReceiver.ACTION_PAUSE, "暂停", 1, timer.id),
-            )
+                .setUsesChronometer(true)
+                .setChronometerCountDown(timer.mode == Mode.COUNTDOWN)
+                .setWhen(chronometer)
         } else {
-            builder.setContentText("已暂停 · ${clock(displayNow(timer, now))}")
-            builder.addAction(
-                action(context, TimerActionReceiver.ACTION_RESUME, "继续", 2, timer.id),
-            )
+            builder.setShortCriticalText(value)
         }
-        builder.addAction(action(context, TimerActionReceiver.ACTION_STOP, "结束", 3, timer.id))
+
+        if (running) {
+            builder.addAction(action(context, TimerActionReceiver.ACTION_PAUSE, label("暂停", "Pause"), 1, timer.id))
+        } else {
+            builder.addAction(action(context, TimerActionReceiver.ACTION_RESUME, label("继续", "Resume"), 2, timer.id))
+        }
+        builder.addAction(action(context, TimerActionReceiver.ACTION_STOP, label("结束", "End"), 3, timer.id))
         return builder.build()
     }
 
@@ -77,9 +83,6 @@ object TimerNotifications {
             .build()
     }
 
-    private fun displayNow(timer: TimerSession, now: Long): Long =
-        if (timer.mode == Mode.COUNTDOWN) remaining(timer, now) else elapsed(timer, now)
-
     private fun openApp(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -91,7 +94,7 @@ object TimerNotifications {
         )
     }
 
-    private fun action(context: Context, action: String, label: String, code: Int, timerId: String): Notification.Action {
+    private fun action(context: Context, action: String, label: String, code: Int, timerId: String): NotificationCompat.Action {
         val intent = Intent(context, TimerActionReceiver::class.java).setAction(action)
             .setData(android.net.Uri.fromParts("pomodoro-timer", timerId, null))
             .putExtra(TimerActionReceiver.EXTRA_TIMER_ID, timerId)
@@ -101,13 +104,18 @@ object TimerNotifications {
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val icon = Icon.createWithResource(context, R.drawable.ic_stat_timer)
-        return Notification.Action.Builder(icon, label, pending).build()
+        return NotificationCompat.Action.Builder(R.drawable.ic_stat_timer, label, pending).build()
     }
+}
 
-    private fun labelFor(action: String): String = when (action) {
-        TimerActionReceiver.ACTION_PAUSE -> "暂停"
-        TimerActionReceiver.ACTION_RESUME -> "继续"
-        else -> "结束"
+/** Converts a timer's corrected timestamp to the wall-clock base expected by Android System UI. */
+internal fun notificationChronometerTime(timer: TimerSession, now: Long, wallNow: Long): Long? {
+    if (timer.status != TimerStatus.RUNNING) return null
+    val start = timer.startedAt ?: return null
+    val anchor = if (timer.mode == Mode.COUNTDOWN) {
+        countdownDeadline(timer, 0L)?.takeIf { it > now } ?: return null
+    } else {
+        (start - timer.elapsed * 1000L).coerceAtMost(now)
     }
+    return wallNow + (anchor - now)
 }
