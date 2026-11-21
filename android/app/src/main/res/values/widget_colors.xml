@@ -1,13 +1,17 @@
 <resources>
     <color name="widget_surface">#FFFFFF</color>
     <color name="widget_text">#16181C</color>
-    <color name="widget_label">#494D57</color>
+    <color name="widget_label">#323A46</color>
     <color name="widget_accent">#3482FF</color>
     <color name="widget_action_surface">#E9F2FF</color>
     <color name="widget_action_text">#155DBD</color>
     <color name="widget_action_ripple">#263482FF</color>
     <color name="widget_quiet_surface">#F0F3F7</color>
-    <color name="widget_glass_start">#D8FFFFFF</color>
-    <color name="widget_glass_end">#EBF2F7FF</color>
-    <color name="widget_glass_edge">#A6FFFFFF</color>
+    <color name="widget_glass_start">#BFEFF6FF</color>
+    <color name="widget_glass_end">#CCE3F0FF</color>
+    <color name="widget_glass_edge">#C9FFFFFF</color>
+    <color name="widget_glass_highlight">#62FFFFFF</color>
+    <color name="widget_glass_highlight_fade">#23FFFFFF</color>
+    <color name="widget_glass_cool">#54B5D7FF</color>
+    <color name="widget_glass_cool_fade">#1DB5D7FF</color>
 </resources>

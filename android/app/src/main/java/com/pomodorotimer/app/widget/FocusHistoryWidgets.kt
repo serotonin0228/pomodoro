@@ -100,7 +100,7 @@ private fun refreshHistoryWidgets(
         val monthLabel = first.format(DateTimeFormatter.ofPattern(if (english) "MMMM yyyy" else "yyyy 年 M 月", locale))
         val view = RemoteViews(context.packageName, R.layout.focus_calendar_widget)
         view.setTextViewText(R.id.calendar_widget_month, monthLabel)
-        view.setOnClickPendingIntent(R.id.widget_root, openStats)
+        view.setOnClickPendingIntent(android.R.id.background, openStats)
         view.removeAllViews(R.id.calendar_widget_grid)
 
         val weekdayRow = RemoteViews(context.packageName, R.layout.widget_calendar_row)
@@ -139,7 +139,7 @@ private fun refreshHistoryWidgets(
         val week = statisticsDays(today, StatisticsPeriod.WEEK, 0)
         val seconds = week.map { totals[it.toString()] ?: 0L }
         val view = RemoteViews(context.packageName, R.layout.focus_stats_widget)
-        view.setOnClickPendingIntent(R.id.widget_root, openStats)
+        view.setOnClickPendingIntent(android.R.id.background, openStats)
         view.setTextViewText(R.id.widget_stats_today_label, if (english) "Today" else "今日专注")
         view.setTextViewText(R.id.widget_stats_today, duration(totals[today.toString()] ?: 0L))
         view.setTextViewText(R.id.widget_stats_week_label, if (english) "This week" else "本周专注")

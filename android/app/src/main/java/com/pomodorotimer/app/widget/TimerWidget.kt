@@ -107,7 +107,7 @@ class TimerWidget : AppWidgetProvider() {
                 TimerStatus.IDLE -> text.start
             }
             view.setTextViewText(R.id.widget_action, action)
-            view.setOnClickPendingIntent(R.id.widget_root, open)
+            view.setOnClickPendingIntent(android.R.id.background, open)
             view.setOnClickPendingIntent(R.id.widget_action, if (foreign) open else primary)
             manager.updateAppWidget(ids, view)
         }
