@@ -7,4 +7,7 @@
     <color name="widget_action_text">#155DBD</color>
     <color name="widget_action_ripple">#263482FF</color>
     <color name="widget_quiet_surface">#F0F3F7</color>
+    <color name="widget_glass_start">#D8FFFFFF</color>
+    <color name="widget_glass_end">#EBF2F7FF</color>
+    <color name="widget_glass_edge">#A6FFFFFF</color>
 </resources>
