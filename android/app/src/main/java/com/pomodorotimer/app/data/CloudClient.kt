@@ -47,10 +47,11 @@ class CloudClient(
         sessionFrom(json)
     }
 
-    suspend fun fetch(session: Session): CloudRow? = withContext(Dispatchers.IO) {
+    suspend fun fetch(session: Session, afterRevision: Long? = null): CloudRow? = withContext(Dispatchers.IO) {
+        val filter = afterRevision?.let { "&revision=gt.$it" }.orEmpty()
         val raw = request(
             "GET",
-            "/rest/v1/workspaces?select=*&user_id=eq.${session.userId}",
+            "/rest/v1/workspaces?select=revision,payload,writer&user_id=eq.${session.userId}$filter",
             null,
             session.accessToken,
         )

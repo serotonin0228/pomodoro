@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="android/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="Pomodoro app icon" width="88">
+  <img src="docs/icon.png" alt="Pomodoro app icon" width="88">
 </p>
 
 <h1 align="center">Pomodoro</h1>

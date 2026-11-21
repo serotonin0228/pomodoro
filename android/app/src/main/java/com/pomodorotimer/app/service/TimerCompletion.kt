@@ -32,6 +32,7 @@ object TimerCompletion {
         if (timer.status == TimerStatus.RUNNING) runCatching { TimerService.start(context) }
         else { TimerService.stop(context); Reminders.cancel(context) }
         TimerService.notifyFinished(context, current.timer.phase, current.settings)
+        runCatching { com.pomodorotimer.app.widget.TimerWidget.refresh(context) }
         context.sendBroadcast(Intent(TimerActionReceiver.ACTION_STATE_CHANGED).setPackage(context.packageName))
         return true
     }

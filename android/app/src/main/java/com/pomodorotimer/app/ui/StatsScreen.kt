@@ -37,6 +37,7 @@ import top.yukonga.miuix.kmp.icon.extended.Timer
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
 @Composable
@@ -51,12 +52,27 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
     var filterIndex by rememberSaveable { mutableIntStateOf(0) }
     var deletingRecord by remember { mutableStateOf<FocusRecord?>(null) }
     val today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
-    val days = remember(today, period, offset) { statisticsDays(today, period, offset) }
+    var customStart by rememberSaveable { mutableStateOf<String?>(null) }
+    var customEnd by rememberSaveable { mutableStateOf<String?>(null) }
+    var editRange by remember { mutableStateOf(false) }
+    var startInput by remember { mutableStateOf("") }
+    var endInput by remember { mutableStateOf("") }
+    var rangeError by remember { mutableStateOf(false) }
+    val custom = remember(customStart, customEnd, today) {
+        val first = customStart ?: return@remember null
+        val last = customEnd ?: return@remember null
+        runCatching { customStatisticsDays(LocalDate.parse(first), LocalDate.parse(last), today) }.getOrNull()
+    }
+    val days = custom ?: remember(today, period, offset) { statisticsDays(today, period, offset) }
+    val byHour = custom == null && period == StatisticsPeriod.DAY
     val totals = remember(state.records) { dailyTotals(state.records) }
     val records = remember(state.records, days) { recordsInDays(state.records, days).sortedByDescending { it.start } }
     val hours = remember(state.records, days) { hourlyTotals(state.records, days) }
     val seconds = days.sumOf { totals[it.toString()] ?: 0L }
-    val previous = remember(today, period, offset) { statisticsDays(today, period, offset - 1) }
+    val previous = remember(today, period, offset, custom) {
+        if (custom == null) statisticsDays(today, period, offset - 1)
+        else custom.map { it.minusDays(custom.size.toLong()) }
+    }
     val previousSeconds = previous.sumOf { totals[it.toString()] ?: 0L }
     val goal = rangeGoal(state.settings, days, totals, state.records, now)
     var streakDay = if ((totals[today.toString()] ?: 0L) >= state.settings.streakMinutes.coerceAtLeast(1) * 60L) today else today.minusDays(1)
@@ -80,7 +96,9 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
     fun dateLabel(date: LocalDate, showYear: Boolean): String = if (en) {
         date.format(DateTimeFormatter.ofPattern(if (showYear) "MMM d, yyyy" else "MMM d", java.util.Locale.ENGLISH))
     } else if (showYear) "${date.year}年${date.monthValue}月${date.dayOfMonth}日" else "${date.monthValue}月${date.dayOfMonth}日"
-    val label = when (period) {
+    val label = if (custom != null) dateLabel(start, start.year != today.year || start.year != end.year) +
+        " – " + dateLabel(end, end.year != today.year || start.year != end.year)
+    else when (period) {
         StatisticsPeriod.DAY -> dateLabel(start, start.year != today.year)
         StatisticsPeriod.WEEK -> {
             val yearsDiffer = start.year != end.year
@@ -102,19 +120,33 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
         ) {
             item {
                 TabRowWithContour(
-                    listOf(text.rangeDay, text.rangeWeek, text.rangeMonth), period.ordinal,
-                    { index -> period = StatisticsPeriod.entries[index]; offset = 0; selectedDate = null },
+                    listOf(text.rangeDay, text.rangeWeek, text.rangeMonth, if (en) "Custom" else "自选"),
+                    if (custom != null) 3 else period.ordinal,
+                    { index ->
+                        if (index == 3) {
+                            startInput = start.toString()
+                            endInput = minOf(end, today).toString()
+                            rangeError = false
+                            editRange = true
+                        } else {
+                            customStart = null
+                            customEnd = null
+                            period = StatisticsPeriod.entries[index]
+                            offset = 0
+                            selectedDate = null
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     indication = null,
                 )
             }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { offset--; selectedDate = null }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { offset--; selectedDate = null }, enabled = custom == null, modifier = Modifier.size(48.dp)) {
                         Icon(OutlineIcons.Previous, contentDescription = if (en) "Previous period" else "上一时段", tint = colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
                     Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f), maxLines = 1)
-                    IconButton(onClick = { offset++; selectedDate = null }, enabled = offset < 0, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { offset++; selectedDate = null }, enabled = custom == null && offset < 0, modifier = Modifier.size(48.dp)) {
                         Icon(OutlineIcons.Next, contentDescription = if (en) "Next period" else "下一时段", tint = colorScheme.primary.copy(alpha = if (offset < 0) 1f else 0.3f), modifier = Modifier.size(18.dp))
                     }
                 }
@@ -131,19 +163,25 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                         Spacer(Modifier.height(4.dp))
                         Text((if (en) "Current streak · $streak days" else "连续专注 · $streak 天"), fontSize = 13.sp, color = colorScheme.onSurfaceVariantSummary)
                         Spacer(Modifier.height(22.dp))
-                        val chart = if (period == StatisticsPeriod.DAY) hours else days.map { totals[it.toString()] ?: 0L }
+                        val buckets = days.chunked((days.size + 30) / 31)
+                        val chart = if (byHour) hours else buckets.map { bucket -> bucket.sumOf { totals[it.toString()] ?: 0L } }
                         val max = maxOf(60L, chart.maxOrNull() ?: 0L)
                         Row(Modifier.fillMaxWidth().height(135.dp), horizontalArrangement = Arrangement.spacedBy(if (chart.size > 14) 2.dp else 8.dp), verticalAlignment = Alignment.Bottom) {
                             chart.forEachIndexed { index, value ->
-                                val date = if (period == StatisticsPeriod.DAY) days.first() else days[index]
-                                Box(Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = "${if (period == StatisticsPeriod.DAY) "$index:00" else date.toString()} ${duration(value)}" }.clickable { selectedDate = if (selected == date) null else date.toString() }, contentAlignment = Alignment.BottomCenter) {
+                                val bucket = if (byHour) days else buckets[index]
+                                val date = bucket.first()
+                                val chartLabel = if (byHour) "$index:00" else if (bucket.size == 1) date.toString() else "$date – ${bucket.last()}"
+                                Box(Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = "$chartLabel ${duration(value)}" }
+                                    .clickable(enabled = bucket.size == 1) { selectedDate = if (selected == date) null else date.toString() },
+                                    contentAlignment = Alignment.BottomCenter) {
                                     Box(Modifier.fillMaxWidth().height((130f * value / max).coerceAtLeast(3f).dp).background(if (value > 0) colorScheme.primary.copy(alpha = if (selected == null || selected == date) 0.85f else 0.3f) else colorScheme.surfaceVariant, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
                                 }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            val labels = when (period) {
+                            val labels = if (custom != null) listOf(dateLabel(start, false), dateLabel(end, false))
+                            else when (period) {
                                 StatisticsPeriod.DAY -> listOf("0", "6", "12", "18", "24")
                                 StatisticsPeriod.WEEK -> if (en) listOf("M", "T", "W", "T", "F", "S", "S") else listOf("一", "二", "三", "四", "五", "六", "日")
                                 StatisticsPeriod.MONTH -> listOf("1", "5", "10", "15", "20", "25", "${days.size}")
@@ -159,7 +197,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                     }
                 }
             }
-            if (period != StatisticsPeriod.DAY) item {
+            if (!byHour) item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth().padding(20.dp)) {
                         Text(if (en) "Time of day" else "时段分布", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -258,6 +296,37 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                     }
                 }
             }
+        }
+    }
+    WindowDialog(
+        show = editRange,
+        title = if (en) "Date range" else "选择日期范围",
+        summary = if (rangeError) {
+            if (en) "Use a valid range of up to 366 days, ending by today." else "请输入有效日期，最多 366 天，结束日期不能晚于今天。"
+        } else "YYYY-MM-DD",
+        onDismissRequest = { editRange = false },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextField(
+                value = startInput, onValueChange = { startInput = it.take(10) },
+                label = if (en) "Start date" else "开始日期", singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            TextField(
+                value = endInput, onValueChange = { endInput = it.take(10) },
+                label = if (en) "End date" else "结束日期", singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            TextButton(text = if (en) "Apply" else "应用", modifier = Modifier.fillMaxWidth(), onClick = {
+                val range = runCatching {
+                    customStatisticsDays(LocalDate.parse(startInput.trim()), LocalDate.parse(endInput.trim()), today)
+                }.getOrNull()
+                if (range == null) rangeError = true
+                else {
+                    customStart = range.first().toString()
+                    customEnd = range.last().toString()
+                    selectedDate = null
+                    editRange = false
+                }
+            })
         }
     }
     WindowDialog(

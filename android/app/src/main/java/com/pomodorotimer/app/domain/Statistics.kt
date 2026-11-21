@@ -20,6 +20,12 @@ fun statisticsDays(today: LocalDate, period: StatisticsPeriod, offset: Int): Lis
     return (0 until count).map { start.plusDays(it.toLong()) }
 }
 
+fun customStatisticsDays(start: LocalDate, end: LocalDate, today: LocalDate): List<LocalDate> {
+    val between = java.time.temporal.ChronoUnit.DAYS.between(start, end)
+    require(end <= today && between in 0..365)
+    return List(between.toInt() + 1) { start.plusDays(it.toLong()) }
+}
+
 fun recordsInDays(records: List<FocusRecord>, days: List<LocalDate>, zone: ZoneId = ZoneId.systemDefault()): List<FocusRecord> {
     if (days.isEmpty()) return emptyList()
     val start = days.first().atStartOfDay(zone).toInstant().toEpochMilli()

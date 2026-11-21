@@ -1,0 +1,5 @@
+<resources>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_text">#16181C</color>
+    <color name="widget_label">#494D57</color>
+</resources>

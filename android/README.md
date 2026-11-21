@@ -44,3 +44,12 @@ gradle :app:testDebugUnitTest
 ## 从 v1.0.11 升级
 
 若升级时已登录，客户端会将旧的本机工作区和曲目索引迁入当前账号。旧工作区原始快照保留在本机。若升级时未登录，本机历史保留为访客数据。已有云端数据沿用原有接口。以后切换账号会切换本机工作区和音乐索引。
+
+
+## GitHub Actions 构建和发布
+
+在 [Build Android APK](https://github.com/serotonin0228/pomodoro/actions/workflows/build-android.yml) 运行 Workflow 可以构建调试包并执行测试。选择 `sign` 可生成签名 APK artifact。再选择 `publish` 则会上传到正式 Release，验证公开下载，然后更新应用内更新清单。签名和发布只对 `main` 开放。
+
+启用签名前，仓库管理员须在 GitHub Actions Secrets 中配置原有发布密钥的 `POMODORO_SIGNING_KEYSTORE_BASE64`、`POMODORO_STORE_PASSWORD`、`POMODORO_KEY_ALIAS`、`POMODORO_KEY_PASSWORD`。在 Actions Variables 中配置 `SUPABASE_URL` 和公开的 `SUPABASE_ANON_KEY`。构建会校验签名指纹，确保 APK 可以覆盖升级。也可以继续本机签名并通过附件 Workflow 发布。
+
+v1.2.0 新增的桌面小组件可从 Android 桌面的添加小组件入口使用。设置中的「专注记录备份」只保存历史记录；恢复时合并进当前工作区，不替换设置与正在进行的计时。

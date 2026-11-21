@@ -65,6 +65,13 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <receiver android:name=".widget.TimerWidget" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/timer_widget_info" />
+        </receiver>
+
         <receiver
             android:name=".service.TimerActionReceiver"
             android:exported="false" />

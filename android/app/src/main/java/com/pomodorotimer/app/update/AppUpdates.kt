@@ -13,7 +13,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-internal data class AppUpdate(val version: String, val url: String, val size: Long)
+internal data class AppUpdate(val version: String, val url: String, val size: Long, val sha256: String? = null)
 
 private const val DOWNLOADS = "https://raw.githubusercontent.com/serotonin0228/pomodoro/apk-distribution"
 private const val MAX_APK_SIZE = 150L * 1024 * 1024
@@ -27,14 +27,20 @@ internal object AppUpdates {
             val version = manifest.getString("version")
             val size = manifest.getLong("size")
             if (!isNewerVersion(version, installedVersion) || size !in 1..MAX_APK_SIZE) return@connect null
-            AppUpdate(version, "$DOWNLOADS/pomodoro-v$version-arm64-v8a.apk", size)
+            val checksum = manifest.optString("sha256").takeIf { it.isNotEmpty() }
+            if (checksum != null && !checksum.matches(Regex("[a-fA-F0-9]{64}"))) return@connect null
+            AppUpdate(version, "$DOWNLOADS/pomodoro-v$version-arm64-v8a.apk", size, checksum)
         }
     }
 
     suspend fun cachedApk(context: Context, update: AppUpdate): File? = withContext(Dispatchers.IO) {
         val file = File(context.cacheDir, "updates/pomodoro-v${update.version}.apk")
         if (!file.isFile || file.length() != update.size) return@withContext null
-        runCatching { verifyApk(context, file, update.version) }.getOrNull()?.let { file }
+        runCatching {
+            verifyChecksum(file, update.sha256)
+            verifyApk(context, file, update.version)
+            file
+        }.getOrNull()
     }
 
     suspend fun download(context: Context, update: AppUpdate, onProgress: (Float) -> Unit): File =
@@ -63,6 +69,7 @@ internal object AppUpdates {
                         }
                     }
                 }
+                verifyChecksum(partial, update.sha256)
                 verifyApk(context, partial, update.version)
                 check(partial.renameTo(apk))
                 directory.listFiles()?.filter { it != apk && it.extension == "apk" }?.forEach { it.delete() }
@@ -71,6 +78,21 @@ internal object AppUpdates {
                 partial.delete()
             }
         }
+
+    private fun verifyChecksum(file: File, expected: String?) {
+        if (expected == null) return
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        check(actual.equals(expected, ignoreCase = true))
+    }
 
     @Suppress("DEPRECATION")
     private fun verifyApk(context: Context, file: File, version: String) {

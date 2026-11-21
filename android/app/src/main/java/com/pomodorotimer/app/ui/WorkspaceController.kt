@@ -79,6 +79,7 @@ class WorkspaceController(context: Context) {
     private var pendingLocal = store.load(account)?.pending == true
     private var workspaceRevision = store.load(account)?.revision ?: 0L
     private var lastClockCheck = 0L
+    private var lastFullFetchAt: Long? = null
     private var locallyStartedSinceClockCheck: String? = null
     private val drafts = appContext.getSharedPreferences("timer_mode_drafts", Context.MODE_PRIVATE)
 
@@ -101,6 +102,7 @@ class WorkspaceController(context: Context) {
         localGeneration++
         pendingLocal = snapshot?.pending == true
         workspaceRevision = snapshot?.revision ?: 0L
+        lastFullFetchAt = null
         locallyStartedSinceClockCheck = null
         cloudSyncStatus = if (account == null) CloudSyncStatus.OFFLINE else CloudSyncStatus.PENDING
         syncSystemState(state)
@@ -221,6 +223,14 @@ class WorkspaceController(context: Context) {
         commit(state.copy(settings = next, timer = timer, updatedAt = now))
     }
 
+    fun restoreHistory(records: List<com.pomodorotimer.app.domain.FocusRecord>, expectedAccount: String?): Int {
+        check(account == expectedAccount && store.activeAccount() == expectedAccount)
+        val merged = com.pomodorotimer.app.domain.mergeRecords(state.records, records)
+        val added = merged.count { !it.deleted } - state.records.count { !it.deleted }
+        if (merged != state.records) commit(state.copy(records = merged, updatedAt = Clock.now()))
+        return added
+    }
+
     fun deleteRecord(id: String) {
         val now = Clock.now()
         commit(
@@ -277,8 +287,17 @@ class WorkspaceController(context: Context) {
                             if (rebased != state) commit(rebased)
                         }
                     }
-                    val remote = client.fetch(session)
+                    val fetchTime = android.os.SystemClock.elapsedRealtime()
+                    val fullFetch = pendingLocal || workspaceRevision <= 0 ||
+                        (lastFullFetchAt?.let { fetchTime - it >= 300_000L } ?: true)
+                    val revisionFilter = if (fullFetch) null else workspaceRevision
+                    val remote = client.fetch(session, afterRevision = revisionFilter)
                     if (prefs.getString("session", null) != raw) return
+                    if (fullFetch) lastFullFetchAt = fetchTime
+                    if (remote == null && revisionFilter != null) {
+                        if (!pendingLocal) cloudSyncStatus = CloudSyncStatus.SYNCED
+                        return
+                    }
                     val local = state
                     val generation = localGeneration
                     val knownRevision = workspaceRevision
@@ -409,6 +428,7 @@ class WorkspaceController(context: Context) {
 
     /** Keeps the foreground service and the exact alarm in step with the timer. */
     private fun syncSystemState(next: AppState) {
+        runCatching { com.pomodorotimer.app.widget.TimerWidget.refresh(appContext) }
         val timer = next.timer
         val foreign = isForeignActive(timer, device)
         // The accessibility service reads this snapshot instead of querying JavaScript.

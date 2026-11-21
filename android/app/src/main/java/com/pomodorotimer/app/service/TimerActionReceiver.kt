@@ -87,6 +87,7 @@ class TimerActionReceiver : BroadcastReceiver() {
         FocusGuardStore.session(context, timer.id, timer.status.name.lowercase(), timer.phase.name.lowercase(),
             timer.mode == Mode.COUNTDOWN, remaining(timer, Clock.now()) * 1000)
         runCatching { MusicCoordinator.sync(context, state) }
+        runCatching { com.pomodorotimer.app.widget.TimerWidget.refresh(context) }
         context.sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(context.packageName))
     }
 

@@ -31,4 +31,16 @@ class StatisticsTest {
         assertEquals(emptyList<FocusRecord>(), recordsInDays(emptyList(), emptyList(), zone))
         assertEquals(0L, hourlyTotals(emptyList(), emptyList(), zone).sum())
     }
+    @Test fun customRangesIncludeBothEndpointsAndLimitWindowSize() {
+        val today = java.time.LocalDate.of(2026, 11, 21)
+        assertEquals(listOf(today.minusDays(1), today), customStatisticsDays(today.minusDays(1), today, today))
+        assertEquals(366, customStatisticsDays(today.minusDays(365), today, today).size)
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            customStatisticsDays(today.minusDays(366), today, today)
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            customStatisticsDays(today, today.plusDays(1), today)
+        }
+    }
+
 }

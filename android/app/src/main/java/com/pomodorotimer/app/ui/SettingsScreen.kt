@@ -268,9 +268,10 @@ fun SettingsScreen(
 
         item { SettingsHeading(text.sectionAppLimits) }
         item { FocusGuardCard(controller) }
-        if (!com.pomodorotimer.app.BuildConfig.DEBUG) item {
+        item {
             Card(modifier = Modifier.fillMaxWidth()) {
-                ArrowPreference(
+                HistoryBackup(controller, settings.language == Language.EN)
+                if (!com.pomodorotimer.app.BuildConfig.DEBUG) ArrowPreference(
                     title = if (settings.language == Language.EN) "Check for updates" else "检查更新",
                     summary = "v${com.pomodorotimer.app.BuildConfig.VERSION_NAME}",
                     startAction = { PreferenceIcon(OutlineIcons.Cloud) },

@@ -1,0 +1,137 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: Sign an arm64 release with the configured project key
+        required: true
+        type: boolean
+        default: false
+      publish:
+        description: Publish the signed APK and enable in-app updates
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: ${{ !inputs.sign || github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare Android SDK and Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          printf 'JAVA_HOME=%s\n' "$JAVA_HOME" >> "$GITHUB_ENV"
+          printf '%s\n' "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 2 -o gradle.zip https://services.gradle.org/distributions/gradle-9.5.0-bin.zip
+          echo "553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746  gradle.zip" | sha256sum --check
+          unzip -q gradle.zip
+          printf '%s\n' "$RUNNER_TEMP/gradle-9.5.0/bin" >> "$GITHUB_PATH"
+
+      - name: Test and build debug APK
+        working-directory: android
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Build and verify signed APK
+        if: ${{ inputs.sign }}
+        working-directory: android
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.POMODORO_SIGNING_KEYSTORE_BASE64 }}
+          POMODORO_STORE_PASSWORD: ${{ secrets.POMODORO_STORE_PASSWORD }}
+          POMODORO_KEY_ALIAS: ${{ secrets.POMODORO_KEY_ALIAS }}
+          POMODORO_KEY_PASSWORD: ${{ secrets.POMODORO_KEY_PASSWORD }}
+          ORG_GRADLE_PROJECT_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          ORG_GRADLE_PROJECT_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SIGNING_KEYSTORE_BASE64:?Configure the existing release keystore secret before signing}"
+          : "${ORG_GRADLE_PROJECT_SUPABASE_URL:?Configure the public Supabase URL}"
+          : "${ORG_GRADLE_PROJECT_SUPABASE_ANON_KEY:?Configure the public Supabase publishable key}"
+          export POMODORO_STORE_FILE="$(mktemp "$RUNNER_TEMP/pomodoro-signing.XXXXXXXX")"
+          trap 'rm -f "$POMODORO_STORE_FILE"' EXIT
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$POMODORO_STORE_FILE"
+          unset SIGNING_KEYSTORE_BASE64
+          gradle --no-daemon -I signing.init.gradle :app:assembleRelease
+          apk="app/build/outputs/apk/release/app-release.apk"
+          tools="$ANDROID_HOME/build-tools/37.0.0"
+          badging="$("$tools/aapt" dump badging "$apk")"
+          grep -Fxq "native-code: 'arm64-v8a'" <<< "$badging"
+          certificates="$("$tools/apksigner" verify --print-certs "$apk")"
+          grep -Fq 'certificate SHA-256 digest: 7c6ea1887ecd021a9d75948bf627ab7bc0a00e0b4672d7ca14becbcfbb518663' <<< "$certificates"
+          version="$(sed -n "s/^package:.*versionName='\([0-9.]*\)'.*/\1/p" <<< "$badging")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          mkdir -p "$RUNNER_TEMP/signed-apk"
+          cp "$apk" "$RUNNER_TEMP/signed-apk/pomodoro-v$version-arm64-v8a.apk"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ inputs.sign }}
+        with:
+          name: pomodoro-arm64-signed
+          path: ${{ runner.temp }}/signed-apk/*.apk
+          if-no-files-found: error
+
+
+  publish:
+    if: ${{ inputs.sign && inputs.publish && github.ref == 'refs/heads/main' }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: pomodoro-stable-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pomodoro-arm64-signed
+          path: signed-apk
+
+      - name: Publish Release and activate in-app updates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(signed-apk/*.apk)
+          [[ ${#files[@]} == 1 ]]
+          apk="${files[0]}"
+          name="${apk##*/}"
+          [[ "$name" =~ ^pomodoro-v([0-9]+\.[0-9]+\.[0-9]+)-arm64-v8a\.apk$ ]]
+          version="${BASH_REMATCH[1]}"
+          tag="v$version"
+          remote="https://github.com/$GITHUB_REPOSITORY.git"
+          git -c 'credential.helper=!gh auth git-credential' clone --quiet --depth 1 --branch apk-distribution "$remote" distribution
+          current="$(jq -er .version distribution/latest.json)"
+          [[ "$version" != "$current" && "$(printf '%s\n' "$current" "$version" | sort -V | tail -1)" == "$version" ]]
+          test ! -e "distribution/$name"
+          gh release create "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes --draft
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          curl -fsSL --retry 4 --retry-all-errors --max-time 60 \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$name" -o released.apk
+          cmp "$apk" released.apk
+
+          cp "$apk" "distribution/$name"
+          jq -n --arg version "$version" --argjson size "$(stat -c %s "$apk")" \
+            --arg sha256 "$(sha256sum "$apk" | cut -d' ' -f1)" \
+            '{version: $version, size: $size, sha256: $sha256}' > distribution/latest.json
+          git -C distribution add "$name" latest.json
+          git -C distribution -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Publish Android $tag"
+          git -C distribution -c 'credential.helper=!gh auth git-credential' push origin HEAD:refs/heads/apk-distribution

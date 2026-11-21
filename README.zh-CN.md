@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="android/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="番茄钟应用图标" width="88">
+  <img src="docs/icon.png" alt="番茄钟应用图标" width="88">
 </p>
 
 <h1 align="center">番茄钟</h1>
