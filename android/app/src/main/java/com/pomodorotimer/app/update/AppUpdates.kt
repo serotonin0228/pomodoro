@@ -31,6 +31,12 @@ internal object AppUpdates {
         }
     }
 
+    suspend fun cachedApk(context: Context, update: AppUpdate): File? = withContext(Dispatchers.IO) {
+        val file = File(context.cacheDir, "updates/pomodoro-v${update.version}.apk")
+        if (!file.isFile || file.length() != update.size) return@withContext null
+        runCatching { verifyApk(context, file, update.version) }.getOrNull()?.let { file }
+    }
+
     suspend fun download(context: Context, update: AppUpdate, onProgress: (Float) -> Unit): File =
         withContext(Dispatchers.IO) {
             val directory = File(context.cacheDir, "updates").also { it.mkdirs() }

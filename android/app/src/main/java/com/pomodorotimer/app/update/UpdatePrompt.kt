@@ -73,6 +73,8 @@ internal fun UpdatePrompt(english: Boolean, sessionActive: Boolean, request: Int
             val candidate = AppUpdates.latest(BuildConfig.VERSION_NAME)
             val snoozedUntil = preferences.getLong("snooze_${candidate?.version}", 0L)
             if (candidate != null && (manual || System.currentTimeMillis() >= snoozedUntil)) {
+                val cached = AppUpdates.cachedApk(context, candidate)
+                downloaded = cached
                 checkStatus = null
                 available = candidate
             } else if (manual) {
@@ -103,7 +105,7 @@ internal fun UpdatePrompt(english: Boolean, sessionActive: Boolean, request: Int
         return
     }
     val update = available ?: return
-    if (sessionActive && request == 0 && !downloading && downloaded == null) return
+    if (sessionActive && request == 0 && !downloading) return
 
     fun snooze() {
         preferences.edit().putLong("snooze_${update.version}", System.currentTimeMillis() + 24 * 60 * 60 * 1000L).apply()

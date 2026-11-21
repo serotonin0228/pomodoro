@@ -297,8 +297,12 @@ class WorkspaceController(context: Context) {
                     val saved = if (remote == null || merged != remote.state)
                         client.save(session, merged, remote?.revision ?: 0L, device) else remote
                     if (prefs.getString("session", null) != raw) return
-                    val result = if (generation == localGeneration) saved.state
-                        else mergePendingWorkspace(state, saved.state)
+                    val result = when {
+                        generation == localGeneration -> saved.state
+                        adoptRemote && isForeignActive(saved.state.timer, device) ->
+                            mergeRemoteTimer(state, saved.state, keepLocalSettings = true)
+                        else -> mergePendingWorkspace(state, saved.state)
+                    }
                     acceptSynced(result, saved.state, saved.revision)
                     return
                 } catch (_: CloudClient.ConflictException) {
