@@ -37,11 +37,12 @@ import android.os.Build
 class MainActivity : ComponentActivity() {
 
     companion object {
+        internal const val ACTION_OPEN_STATS = "com.pomodorotimer.app.action.OPEN_STATS"
         internal const val ACTION_RETURN_TO_TIMER = "com.pomodorotimer.app.action.RETURN_TO_TIMER"
     }
 
     private var controller: WorkspaceController? = null
-    private var openTimerWhenReady = false
+    private var pendingTab: WorkspaceTab? = null
 
     private val stateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -51,14 +52,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        openTimerWhenReady = intent.action == ACTION_RETURN_TO_TIMER
+        pendingTab = requestedTab(intent)
         val filter = IntentFilter(TimerActionReceiver.ACTION_STATE_CHANGED)
         ContextCompat.registerReceiver(this, stateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         setContent {
             val workspace = remember { WorkspaceController(applicationContext) }
             SideEffect {
                 controller = workspace
-                if (openTimerWhenReady) showTimer(workspace)
+                showRequestedTab(workspace)
             }
 
             val systemDark = isSystemInDarkTheme()
@@ -109,16 +110,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == ACTION_RETURN_TO_TIMER) {
-            val workspace = controller
-            if (workspace == null) openTimerWhenReady = true else showTimer(workspace)
-        }
+        pendingTab = requestedTab(intent)
+        controller?.let(::showRequestedTab)
     }
 
-    private fun showTimer(workspace: WorkspaceController) {
-        openTimerWhenReady = false
-        workspace.tab = WorkspaceTab.TIMER
-        FocusGuardDiagnostics.returns++
+    private fun requestedTab(intent: Intent): WorkspaceTab? = when (intent.action) {
+        ACTION_OPEN_STATS -> WorkspaceTab.STATS
+        ACTION_RETURN_TO_TIMER -> WorkspaceTab.TIMER
+        else -> null
+    }
+
+    private fun showRequestedTab(workspace: WorkspaceController) {
+        val tab = pendingTab ?: return
+        pendingTab = null
+        workspace.tab = tab
+        if (tab == WorkspaceTab.TIMER) FocusGuardDiagnostics.returns++
     }
 
     override fun onResume() {

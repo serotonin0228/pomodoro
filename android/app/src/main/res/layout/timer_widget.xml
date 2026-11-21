@@ -4,24 +4,71 @@
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="12dp"
+    android:paddingHorizontal="14dp"
     android:background="@drawable/timer_widget_background">
+
     <LinearLayout
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="wrap_content"
         android:orientation="vertical">
-        <TextView android:id="@+id/widget_title" android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:text="@string/app_name"
-            android:textColor="@color/widget_label" android:textSize="12sp"/>
-        <TextView android:id="@+id/widget_time" android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:textColor="@color/widget_text"
-            android:maxLines="1" android:textSize="24sp"/>
-        <Chronometer android:id="@+id/widget_chronometer" android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:textColor="@color/widget_text"
-            android:maxLines="1" android:textSize="24sp" android:visibility="gone"/>
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/app_name"
+            android:textColor="@color/widget_label"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autoSizeMinTextSize="18sp"
+            android:autoSizeMaxTextSize="30sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="30sp" />
+
+        <Chronometer
+            android:id="@+id/widget_chronometer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autoSizeMinTextSize="18sp"
+            android:autoSizeMaxTextSize="30sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="30sp"
+            android:visibility="gone" />
     </LinearLayout>
-    <Button android:id="@+id/widget_action" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:minWidth="56dp" android:minHeight="48dp"
-        android:textAllCaps="false"/>
+
+    <Button
+        android:id="@+id/widget_action"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_timer_action"
+        android:backgroundTint="@null"
+        android:elevation="0dp"
+        android:fontFamily="sans-serif-medium"
+        android:minWidth="52dp"
+        android:minHeight="0dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="0dp"
+        android:stateListAnimator="@null"
+        android:textAllCaps="false"
+        android:textColor="@color/widget_action_text"
+        android:textSize="13sp" />
 </LinearLayout>

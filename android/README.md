@@ -52,4 +52,4 @@ gradle :app:testDebugUnitTest
 
 启用签名前，仓库管理员须在 GitHub Actions Secrets 中配置原有发布密钥的 `POMODORO_SIGNING_KEYSTORE_BASE64`、`POMODORO_STORE_PASSWORD`、`POMODORO_KEY_ALIAS`、`POMODORO_KEY_PASSWORD`。在 Actions Variables 中配置 `SUPABASE_URL` 和公开的 `SUPABASE_ANON_KEY`。构建会校验签名指纹，确保 APK 可以覆盖升级。也可以继续本机签名并通过附件 Workflow 发布。
 
-v1.2.0 新增的桌面小组件可从 Android 桌面的添加小组件入口使用。
+从 Android 桌面的添加小组件入口可添加专注计时、专注日历和专注统计。日历按本月每天的专注时长着色，统计显示今日、本周累计和七天柱状图。

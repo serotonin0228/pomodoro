@@ -2,4 +2,9 @@
     <color name="widget_surface">#202125</color>
     <color name="widget_text">#F4F5F8</color>
     <color name="widget_label">#C7CAD4</color>
+    <color name="widget_accent">#80B3FF</color>
+    <color name="widget_action_surface">#25416A</color>
+    <color name="widget_action_text">#D3E5FF</color>
+    <color name="widget_action_ripple">#40ABD0FF</color>
+    <color name="widget_quiet_surface">#2C2E35</color>
 </resources>

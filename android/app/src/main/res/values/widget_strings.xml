@@ -1,0 +1,5 @@
+<resources>
+    <string name="widget_focus_timer">Focus timer</string>
+    <string name="widget_focus_calendar">Focus calendar</string>
+    <string name="widget_focus_stats">Focus statistics</string>
+</resources>

@@ -1,0 +1,5 @@
+<resources>
+    <string name="widget_focus_timer">专注计时</string>
+    <string name="widget_focus_calendar">专注日历</string>
+    <string name="widget_focus_stats">专注统计</string>
+</resources>

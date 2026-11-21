@@ -66,11 +66,25 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <receiver android:name=".widget.TimerWidget" android:exported="false">
+        <receiver android:name=".widget.TimerWidget" android:exported="false" android:label="@string/widget_focus_timer">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/timer_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.FocusStatsWidget" android:exported="false" android:label="@string/widget_focus_stats">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/focus_stats_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.FocusCalendarWidget" android:exported="false" android:label="@string/widget_focus_calendar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/focus_calendar_widget_info" />
         </receiver>
 
         <receiver

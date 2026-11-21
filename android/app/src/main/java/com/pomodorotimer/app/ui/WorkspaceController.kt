@@ -420,7 +420,7 @@ class WorkspaceController(context: Context) {
 
     /** Keeps the foreground service and the exact alarm in step with the timer. */
     private fun syncSystemState(next: AppState) {
-        runCatching { com.pomodorotimer.app.widget.TimerWidget.refresh(appContext) }
+        com.pomodorotimer.app.widget.refreshWorkspaceWidgets(appContext)
         val timer = next.timer
         val foreign = isForeignActive(timer, device)
         // The accessibility service reads this snapshot instead of querying JavaScript.

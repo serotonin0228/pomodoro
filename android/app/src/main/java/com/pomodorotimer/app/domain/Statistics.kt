@@ -61,3 +61,10 @@ fun hourlyTotals(records: List<FocusRecord>, days: List<LocalDate>, zone: ZoneId
     }
     return totals
 }
+
+/** Accent blend for a focus calendar cell, capped at twelve hours. */
+internal fun focusCalendarIntensity(seconds: Long): Float {
+    if (seconds <= 0) return 0f
+    val fraction = (seconds / (12 * 3600f)).coerceAtMost(1f)
+    return 0.11f + 0.44f * kotlin.math.sqrt(fraction)
+}
