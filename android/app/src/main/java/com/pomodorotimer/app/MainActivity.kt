@@ -11,6 +11,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import android.view.WindowManager
+import com.pomodorotimer.app.ui.WorkspaceTab
 import com.pomodorotimer.app.domain.ThemeMode
 import com.pomodorotimer.app.domain.Language
 import com.pomodorotimer.app.update.UpdatePrompt
@@ -65,11 +71,27 @@ class MainActivity : ComponentActivity() {
                 onDispose { }
             }
 
+            val devicePrefs = remember { getSharedPreferences("device_preferences", MODE_PRIVATE) }
+            var keepScreenOn by remember { mutableStateOf(devicePrefs.getBoolean("keep_screen_on", false)) }
+            var updateRequest by remember { mutableIntStateOf(0) }
+            val screenOn = keepScreenOn && workspace.isRunning && workspace.tab == WorkspaceTab.TIMER
+            DisposableEffect(screenOn) {
+                if (screenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            }
             val language = workspace.state.settings.language
             CompositionLocalProvider(LocalUiText provides uiText(language)) {
                 PomodoroTheme(themeMode = workspace.state.settings.theme) {
-                    AppShell(controller = workspace)
-                    UpdatePrompt(english = language == Language.EN)
+                    AppShell(
+                        controller = workspace,
+                        keepScreenOn = keepScreenOn,
+                        onKeepScreenOn = { enabled ->
+                            keepScreenOn = enabled
+                            devicePrefs.edit().putBoolean("keep_screen_on", enabled).apply()
+                        },
+                        onCheckUpdates = { updateRequest++ },
+                    )
+                    UpdatePrompt(english = language == Language.EN, sessionActive = workspace.isActive, request = updateRequest)
                 }
             }
         }

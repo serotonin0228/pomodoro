@@ -3,6 +3,7 @@ package com.pomodorotimer.app.ui
 import android.content.Context
 import com.pomodorotimer.app.BuildConfig
 import com.pomodorotimer.app.data.CloudClient
+import com.pomodorotimer.app.data.MusicDownloads
 import com.pomodorotimer.app.data.StateCodec
 import com.pomodorotimer.app.domain.modeDraft
 import com.pomodorotimer.app.domain.switchModeState
@@ -55,7 +56,8 @@ class WorkspaceController(context: Context) {
 
     private val appContext = context.applicationContext
     private val store = WorkspaceStore(appContext)
-    private val account: String? = null
+    var account: String? by mutableStateOf(store.activeAccount())
+        private set
 
     val device: String = store.deviceId()
 
@@ -75,15 +77,35 @@ class WorkspaceController(context: Context) {
     private val syncRequests = Channel<Unit>(Channel.CONFLATED)
     private var localGeneration = 0L
     private var pendingLocal = store.load(account)?.pending == true
+    private var workspaceRevision = store.load(account)?.revision ?: 0L
     private var lastClockCheck = 0L
     private var locallyStartedSinceClockCheck: String? = null
     private val drafts = appContext.getSharedPreferences("timer_mode_drafts", Context.MODE_PRIVATE)
 
-    private var advanceAt: Long? = null
 
     val isRemoteActive: Boolean get() = isForeignActive(state.timer, device)
     fun requestSync() { syncRequests.trySend(Unit) }
-    suspend fun awaitSync() { withTimeoutOrNull(4_000L) { syncRequests.receive() } }
+    suspend fun awaitSync() {
+        val interval = if (isActive || tab == WorkspaceTab.TIMER) 4_000L else 12_000L
+        withTimeoutOrNull(interval) { syncRequests.receive() }
+    }
+
+    fun switchWorkspace() {
+        val nextAccount = store.activeAccount()
+        if (nextAccount == account) return
+        MusicDownloads.cancelAll()
+        runCatching { MusicCoordinator.stop(appContext) }
+        account = nextAccount
+        val snapshot = store.load(account)
+        state = snapshot?.state ?: initialState(device)
+        localGeneration++
+        pendingLocal = snapshot?.pending == true
+        workspaceRevision = snapshot?.revision ?: 0L
+        locallyStartedSinceClockCheck = null
+        cloudSyncStatus = if (account == null) CloudSyncStatus.OFFLINE else CloudSyncStatus.PENDING
+        syncSystemState(state)
+        requestSync()
+    }
 
     val isRunning: Boolean get() = state.timer.status == TimerStatus.RUNNING
     val isPaused: Boolean get() = state.timer.status == TimerStatus.PAUSED
@@ -153,11 +175,12 @@ class WorkspaceController(context: Context) {
         val now = Clock.now()
         val draft = modeDraft(state, now)
         val departing = draft ?: state
-        val destinationKey = mode.name
+        val prefix = "${account ?: "guest"}:"
+        val destinationKey = prefix + mode.name
         val saved = drafts.getString(destinationKey, null)?.let { StateCodec.decode(it) }
         val editor = drafts.edit().remove(destinationKey)
-        if (draft != null) editor.putString(state.timer.mode.name, StateCodec.encode(draft))
-        else editor.remove(state.timer.mode.name)
+        if (draft != null) editor.putString(prefix + state.timer.mode.name, StateCodec.encode(draft))
+        else editor.remove(prefix + state.timer.mode.name)
         editor.apply()
         commit(switchModeState(departing, saved, mode, device, now))
     }
@@ -225,8 +248,9 @@ class WorkspaceController(context: Context) {
         var raw = prefs.getString("session", null) ?: run { cloudSyncStatus = CloudSyncStatus.OFFLINE; return }
         if (!syncMutex.tryLock()) return
         try {
-            cloudSyncStatus = CloudSyncStatus.SYNCING
+            if (cloudSyncStatus != CloudSyncStatus.SYNCED) cloudSyncStatus = CloudSyncStatus.SYNCING
             var session = parseSession(raw) ?: run { cloudSyncStatus = CloudSyncStatus.ERROR; return }
+            if (session.userId != account) return
             val client = CloudClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
             if (!client.configured) { cloudSyncStatus = CloudSyncStatus.ERROR; return }
             repeat(3) {
@@ -235,18 +259,20 @@ class WorkspaceController(context: Context) {
                         val beforeWall = System.currentTimeMillis()
                         val beforeMono = android.os.SystemClock.elapsedRealtime()
                         val server = client.serverTime(session)
+                        if (prefs.getString("session", null) != raw) return
                         val afterMono = android.os.SystemClock.elapsedRealtime()
                         val afterWall = System.currentTimeMillis()
                         val roundTrip = afterMono - beforeMono
                         // A slow or interrupted sample has too much uncertainty to calibrate a clock.
                         if (server != null && roundTrip in 0..2000L &&
                             kotlin.math.abs((afterWall - beforeWall) - roundTrip) < 100L) {
-                            val offset = server - (beforeWall + roundTrip / 2)
+                            val wallOffset = server - (beforeWall + roundTrip / 2)
+                            val offset = server - (Clock.uncorrectedNow() - roundTrip / 2)
                             val oldOffset = Clock.correction()
                             val rebased = if (isRemoteActive) state else rebaseRunningTimer(state, locallyStartedSinceClockCheck, oldOffset, offset)
                             Clock.setCorrection(offset)
                             locallyStartedSinceClockCheck = null
-                            prefs.edit().putLong("clock_offset", offset).apply()
+                            prefs.edit().putLong("clock_offset", wallOffset).apply()
                             lastClockCheck = afterMono
                             if (rebased != state) commit(rebased)
                         }
@@ -255,7 +281,7 @@ class WorkspaceController(context: Context) {
                     if (prefs.getString("session", null) != raw) return
                     val local = state
                     val generation = localGeneration
-                    val knownRevision = prefs.getLong("revision", 0L)
+                    val knownRevision = workspaceRevision
                     val remoteChanged = remote != null && remote.revision > knownRevision
                     val adoptRemote = remoteChanged && remote != null && (
                         !pendingLocal || isForeignActive(local.timer, device) ||
@@ -304,6 +330,7 @@ class WorkspaceController(context: Context) {
         val prefs = appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE)
         val raw = prefs.getString("session", null) ?: return@withLock false
         val session = parseSession(raw) ?: return@withLock false
+        if (session.userId != account) return@withLock false
         val client = CloudClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
         try {
             repeat(3) {
@@ -327,11 +354,9 @@ class WorkspaceController(context: Context) {
     }
 
     private fun acceptSynced(next: AppState, saved: AppState, revision: Long) {
-        val prefs = appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE)
-        prefs.edit().putLong("revision", revision).apply()
+        workspaceRevision = revision
         if (next != state) {
             state = next
-            if (isRemoteActive) advanceAt = null
             store.save(account, PersistedWorkspace(next, next != saved, revision))
             syncSystemState(next)
         } else store.save(account, PersistedWorkspace(next, next != saved, revision))
@@ -353,13 +378,13 @@ class WorkspaceController(context: Context) {
 
     fun tick(now: Long = Clock.now()) {
         val timer = state.timer
-        if (isRemoteActive) { advanceAt = null; return }
+        if (isRemoteActive) return
 
         if (timer.status == TimerStatus.RUNNING && timer.mode == Mode.COUNTDOWN && elapsed(timer, now) >= timer.duration) {
             // Notification actions and the alarm can update disk while the activity is backgrounded.
             val persisted = store.load(account)?.state
             if (persisted != null && persisted != state) { refresh(); return }
-            if (TimerCompletion.complete(appContext, now)) {
+            if (TimerCompletion.complete(appContext, now, timer.id)) {
                 refresh()
                 toast = if (timer.phase == Phase.FOCUS) "专注完成" else "休息结束"
             }
@@ -374,7 +399,7 @@ class WorkspaceController(context: Context) {
         localGeneration++
         requestSync()
         if (appContext.getSharedPreferences("cloud", Context.MODE_PRIVATE).contains("session")) cloudSyncStatus = CloudSyncStatus.PENDING
-        store.save(account, PersistedWorkspace(next, pending = true, revision = 0L))
+        store.save(account, PersistedWorkspace(next, pending = true, revision = workspaceRevision))
         syncSystemState(next)
     }
 

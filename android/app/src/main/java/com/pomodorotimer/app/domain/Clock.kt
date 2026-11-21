@@ -10,7 +10,16 @@ object Clock {
     @Volatile
     private var correction: Long = 0L
 
-    fun now(): Long = System.currentTimeMillis() + correction
+    private var source: () -> Long = System::currentTimeMillis
+
+    fun useMonotonicSource(elapsedRealtime: () -> Long) {
+        val epoch = System.currentTimeMillis() - elapsedRealtime()
+        source = { epoch + elapsedRealtime() }
+    }
+
+    fun uncorrectedNow(): Long = source()
+
+    fun now(): Long = uncorrectedNow() + correction
 
     fun correction(): Long = correction
 

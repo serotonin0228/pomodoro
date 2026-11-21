@@ -18,12 +18,19 @@ fun isForeignActive(timer: TimerSession, device: String): Boolean =
         timer.device.isNotBlank() && timer.device != device
 
 /** Adopt the authoritative timer while retaining independently created history and local settings. */
-fun mergeRemoteTimer(local: AppState, remote: AppState, keepLocalSettings: Boolean): AppState =
-    remote.copy(
-        records = mergeRecords(local.records, remote.records),
+fun mergeRemoteTimer(local: AppState, remote: AppState, keepLocalSettings: Boolean): AppState {
+    val remoteTimer = remote.timer
+    val remoteStillActive = remoteTimer.status == TimerStatus.RUNNING || remoteTimer.status == TimerStatus.PAUSED
+    // A former owner may finish offline before learning that this session was claimed.
+    val localRecords = if (remoteStillActive && remote.records.none { it.id == remoteTimer.id }) {
+        local.records.filterNot { it.id == remoteTimer.id }
+    } else local.records
+    return remote.copy(
+        records = mergeRecords(localRecords, remote.records),
         settings = if (keepLocalSettings) local.settings else remote.settings,
         updatedAt = if (keepLocalSettings) maxOf(local.updatedAt, remote.updatedAt) else remote.updatedAt,
     )
+}
 
 fun claimTimer(state: AppState, device: String, now: Long): AppState =
     state.copy(timer = state.timer.copy(device = device), updatedAt = maxOf(now, state.updatedAt + 1))

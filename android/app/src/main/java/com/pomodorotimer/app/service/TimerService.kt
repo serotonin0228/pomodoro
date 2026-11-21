@@ -35,7 +35,7 @@ class TimerService : Service() {
         }
 
         val store = WorkspaceStore(this)
-        val timer = store.load(null)?.state?.timer
+        val timer = store.loadActive()?.state?.timer
         if (timer == null || isForeignActive(timer, store.deviceId()) || (timer.status != TimerStatus.RUNNING && timer.status != TimerStatus.PAUSED)) {
             stopTimer()
             return START_NOT_STICKY

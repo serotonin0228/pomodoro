@@ -15,13 +15,16 @@ import com.pomodorotimer.app.focus.FocusGuardStore
 
 /** Shared completion path for the activity and the alarm, including when the UI is not running. */
 object TimerCompletion {
-    fun complete(context: Context, now: Long = Clock.now()): Boolean {
+    fun complete(context: Context, now: Long = Clock.now(), expectedTimerId: String): Boolean {
         val store = WorkspaceStore(context)
-        val current = store.load(null)?.state ?: return false
+        val account = store.activeAccount()
+        val workspace = store.load(account) ?: return false
+        val current = workspace.state
+        if (current.timer.id != expectedTimerId) return false
         if (isForeignActive(current.timer, store.deviceId())) return false
         val next = completeCountdown(current, store.deviceId(), now)
         if (next == current) return false
-        store.save(null, PersistedWorkspace(next, pending = true, revision = 0L))
+        store.save(account, PersistedWorkspace(next, pending = true, revision = workspace.revision))
         val timer = next.timer
         FocusGuardStore.session(context, timer.id, timer.status.name.lowercase(), timer.phase.name.lowercase(),
             timer.mode == Mode.COUNTDOWN, remaining(timer, now) * 1000)

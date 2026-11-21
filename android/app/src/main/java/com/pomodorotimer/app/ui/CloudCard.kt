@@ -109,6 +109,7 @@ fun CloudCard(controller: WorkspaceController) {
                     message = text.confirmEmail
                 } else {
                     saveSession(prefs, next)
+                    controller.switchWorkspace()
                     val signedInEmail = accountEmail(next.accessToken) ?: email.trim()
                     prefs.edit().putString("account_email_${next.userId}", signedInEmail).apply()
                     session = next
@@ -168,7 +169,8 @@ fun CloudCard(controller: WorkspaceController) {
                 if (controller.cloudSyncError) Text(text.syncError, color = colorScheme.onSurfaceVariantSummary)
                 Spacer(Modifier.height(4.dp))
                 TextButton(text = text.signOut, modifier = Modifier.fillMaxWidth(), onClick = {
-                    prefs.edit().clear().apply()
+                    prefs.edit().remove("session").apply()
+                    controller.switchWorkspace()
                     session = null
                     password = ""
                     showAccount = false

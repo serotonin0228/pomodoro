@@ -12,19 +12,19 @@ import com.pomodorotimer.app.domain.elapsed
 /**
  * Fires when the countdown reaches zero while the app is not ticking.
  *
- * It posts the completion notice and releases the foreground service; the persisted timer is left
- * untouched on purpose, so opening the app applies the normal completion transition exactly once.
+ * The same completion path is used when the timer screen is visible.
  */
 class TimerAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val store = WorkspaceStore(context)
-        val timer = store.load(null)?.state?.timer ?: return
+        val timer = store.loadActive()?.state?.timer ?: return
+        if (intent.getStringExtra(TimerActionReceiver.EXTRA_TIMER_ID) != timer.id) return
         if (isForeignActive(timer, store.deviceId()) || timer.status != TimerStatus.RUNNING || timer.mode != Mode.COUNTDOWN) return
         if (elapsed(timer) < timer.duration) {
             Reminders.sync(context, timer)
             return
         }
-        TimerCompletion.complete(context)
+        TimerCompletion.complete(context, expectedTimerId = timer.id)
     }
 }

@@ -38,5 +38,9 @@ gradle :app:testDebugUnitTest
 ## 发布应用内更新
 
 1. 提高 `versionCode`，并将 `versionName` 设置为三段数字。使用与上一版相同的签名构建 arm64-v8a APK。
-2. 将签名后的 APK 以 `pomodoro-v<versionName>-arm64-v8a.apk` 的名称放入 `apk-distribution` 分支根目录。更新同目录下的 `latest.json`，格式为 `{"version":"1.0.11","size":123456}`，其中 `size` 是 APK 的实际字节数。将 APK 和清单放在同一次提交中发布；已发布的旧文件可保留，供历史 Release 下载。
-3. 建立对应的 GitHub Release，并链接该版本的 APK。应用在启动时读取下载分支的清单，因此仅推送源代码或建立 tag 不会触发提醒。
+2. 将签名后的 APK 以 `pomodoro-v<versionName>-arm64-v8a.apk` 的名称放入 `apk-distribution` 分支根目录。更新同目录下的 `latest.json`，格式为 `{"version":"1.0.11","size":123456}`，其中 `size` 是 APK 的实际字节数。已发布的旧文件可保留，供历史 Release 下载。
+3. 建立对应的 GitHub Release，并运行 [Attach signed APK to Release](https://github.com/serotonin0228/pomodoro/actions/workflows/attach-release-apk.yml) 校验和上传 APK。在正式发布中，先推送 APK、检查 Release 的附件可以下载，再更新 `latest.json`。应用在启动时读取此清单。
+
+## 从 v1.0.11 升级
+
+若升级时已登录，客户端会将旧的本机工作区和曲目索引迁入当前账号。旧工作区原始快照保留在本机。若升级时未登录，本机历史保留为访客数据。已有云端数据沿用原有接口。以后切换账号会切换本机工作区和音乐索引。

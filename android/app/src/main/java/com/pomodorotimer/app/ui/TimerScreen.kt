@@ -41,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pomodorotimer.app.data.MusicRepository
+import com.pomodorotimer.app.data.MusicDownloads
+import com.pomodorotimer.app.service.MusicPlayback
 import com.pomodorotimer.app.domain.Mode
 import com.pomodorotimer.app.domain.Phase
 import com.pomodorotimer.app.domain.TimerStatus
@@ -83,7 +85,7 @@ fun TimerScreen(
     val timer = state.timer
     val text = LocalUiText.current
     val context = LocalContext.current
-    val queue = remember(state.settings.musicTrackId, state.settings.musicEnabled) { MusicRepository.loadQueue(context) }
+    val queue = remember(controller.account, MusicDownloads.queueRevision, state.settings.musicTrackId, state.settings.musicEnabled) { MusicRepository.loadQueue(context) }
     val track = queue?.titles?.getOrNull(MusicRepository.startIndex(queue, state.settings.musicTrackId))
     var confirmingEnd by remember { mutableStateOf(false) }
     var showingMusic by remember { mutableStateOf(false) }
@@ -161,7 +163,7 @@ fun TimerScreen(
                 Spacer(Modifier.weight(1f))
                 Card(modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(CardDefaults.CornerRadius))) {
                     ArrowPreference(
-                        title = track ?: text.sectionMusic,
+                        title = MusicPlayback.title.takeIf { MusicPlayback.playing && it.isNotBlank() } ?: track ?: text.sectionMusic,
                         startAction = { Icon(imageVector = OutlineIcons.Music, contentDescription = null, tint = colorScheme.primary) },
                         onClick = { showingMusic = true },
                     )

@@ -29,15 +29,17 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 import java.io.File
 
 @Composable
-internal fun UpdatePrompt(english: Boolean) {
+internal fun UpdatePrompt(english: Boolean, sessionActive: Boolean, request: Int) {
     if (BuildConfig.DEBUG) return
     val context = LocalContext.current
+    val preferences = remember(context) { context.getSharedPreferences("update_prompt", android.content.Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     var available by remember { mutableStateOf<AppUpdate?>(null) }
     var downloaded by remember { mutableStateOf<File?>(null) }
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     var failed by remember { mutableStateOf(false) }
+    var checkStatus by remember { mutableStateOf<CheckStatus?>(null) }
 
     fun install(apk: File) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", apk)
@@ -64,17 +66,50 @@ internal fun UpdatePrompt(english: Boolean) {
         }.isFailure
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(request) {
+        val manual = request > 0
+        if (manual) checkStatus = CheckStatus.CHECKING
         try {
-            available = AppUpdates.latest(BuildConfig.VERSION_NAME)
+            val candidate = AppUpdates.latest(BuildConfig.VERSION_NAME)
+            val snoozedUntil = preferences.getLong("snooze_${candidate?.version}", 0L)
+            if (candidate != null && (manual || System.currentTimeMillis() >= snoozedUntil)) {
+                checkStatus = null
+                available = candidate
+            } else if (manual) {
+                checkStatus = CheckStatus.UP_TO_DATE
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            // The timer works offline. Retry on the next launch.
+            if (manual) checkStatus = CheckStatus.FAILED
         }
     }
 
+    val status = checkStatus
+    if (status != null) {
+        val summary = when (status) {
+            CheckStatus.CHECKING -> if (english) "Checking…" else "正在检查…"
+            CheckStatus.UP_TO_DATE -> if (english) "You’re up to date." else "已是最新版本。"
+            CheckStatus.FAILED -> if (english) "Could not check for updates." else "暂时无法检查更新。"
+        }
+        WindowDialog(
+            show = true,
+            title = if (english) "App update" else "应用更新",
+            summary = summary,
+            onDismissRequest = { checkStatus = null },
+        ) {
+            TextButton(text = if (english) "Close" else "关闭", onClick = { checkStatus = null }, modifier = Modifier.fillMaxWidth())
+        }
+        return
+    }
     val update = available ?: return
+    if (sessionActive && request == 0 && !downloading && downloaded == null) return
+
+    fun snooze() {
+        preferences.edit().putLong("snooze_${update.version}", System.currentTimeMillis() + 24 * 60 * 60 * 1000L).apply()
+        available = null
+    }
+
     val message = when {
         failed -> if (english) "Update failed. Try again." else "更新失败，请重试。"
         downloading -> if (english) "Downloading · $progress%" else "正在下载 · $progress%"
@@ -85,7 +120,7 @@ internal fun UpdatePrompt(english: Boolean) {
         show = true,
         title = if (english) "App update" else "应用更新",
         summary = message,
-        onDismissRequest = { if (!downloading) available = null },
+        onDismissRequest = { if (!downloading) snooze() },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(
@@ -127,8 +162,10 @@ internal fun UpdatePrompt(english: Boolean) {
                 text = if (english) "Later" else "稍后",
                 enabled = !downloading,
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { available = null },
+                onClick = { snooze() },
             )
         }
     }
 }
+
+private enum class CheckStatus { CHECKING, UP_TO_DATE, FAILED }

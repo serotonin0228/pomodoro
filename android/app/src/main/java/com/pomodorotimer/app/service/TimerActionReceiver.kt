@@ -28,7 +28,10 @@ class TimerActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val store = WorkspaceStore(context)
-        val current = store.load(null)?.state ?: return
+        val workspace = store.loadActive() ?: return
+        val current = workspace.state
+        if (intent.getStringExtra(EXTRA_TIMER_ID) != current.timer.id ||
+            current.timer.status !in setOf(TimerStatus.RUNNING, TimerStatus.PAUSED)) return
         if (isForeignActive(current.timer, store.deviceId())) return
         val now = Clock.now()
 
@@ -77,7 +80,9 @@ class TimerActionReceiver : BroadcastReceiver() {
     }
 
     private fun persist(context: Context, store: WorkspaceStore, state: com.pomodorotimer.app.domain.AppState) {
-        store.save(null, PersistedWorkspace(state, pending = true, revision = 0L))
+        val account = store.activeAccount()
+        val revision = store.load(account)?.revision ?: 0L
+        store.save(account, PersistedWorkspace(state, pending = true, revision = revision))
         val timer = state.timer
         FocusGuardStore.session(context, timer.id, timer.status.name.lowercase(), timer.phase.name.lowercase(),
             timer.mode == Mode.COUNTDOWN, remaining(timer, Clock.now()) * 1000)
@@ -86,6 +91,7 @@ class TimerActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val EXTRA_TIMER_ID = "timer_id"
         const val ACTION_PAUSE = "com.pomodorotimer.app.action.PAUSE"
         const val ACTION_RESUME = "com.pomodorotimer.app.action.RESUME"
         const val ACTION_STOP = "com.pomodorotimer.app.action.STOP"

@@ -27,11 +27,21 @@ object MusicRepository {
             put("titles", JSONArray(queue.titles))
             put("ids", JSONArray(queue.trackIds))
         }
-        prefs(context).edit().putString(KEY_QUEUE, json.toString()).apply()
+        prefs(context).edit().putString(queueKey(context), json.toString()).apply()
     }
 
     fun loadQueue(context: Context): Queue? {
-        val raw = prefs(context).getString(KEY_QUEUE, null) ?: return null
+        val prefs = prefs(context)
+        if (!prefs.getBoolean("queue_accounts_v2", false)) {
+            val owner = WorkspaceStore(context).legacyOwner()
+            val editor = prefs.edit().putBoolean("queue_accounts_v2", true)
+            val old = prefs.getString(KEY_QUEUE, null)
+            if (old != null && owner != null && !prefs.contains("$KEY_QUEUE:$owner")) {
+                editor.putString("$KEY_QUEUE:$owner", old).remove(KEY_QUEUE)
+            }
+            editor.apply()
+        }
+        val raw = prefs.getString(queueKey(context), null) ?: return null
         return runCatching {
             val json = JSONObject(raw)
             Queue(
@@ -51,6 +61,9 @@ object MusicRepository {
 
     private fun JSONArray.toStringList(): List<String> =
         (0 until length()).map { optString(it) }
+
+    private fun queueKey(context: Context): String =
+        WorkspaceStore(context).activeAccount()?.let { "$KEY_QUEUE:$it" } ?: KEY_QUEUE
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

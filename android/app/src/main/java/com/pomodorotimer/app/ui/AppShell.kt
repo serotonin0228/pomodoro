@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -38,10 +39,16 @@ import top.yukonga.miuix.kmp.icon.extended.Weeks
  * component.
  */
 @Composable
-fun AppShell(controller: WorkspaceController) {
+fun AppShell(
+    controller: WorkspaceController,
+    keepScreenOn: Boolean,
+    onKeepScreenOn: (Boolean) -> Unit,
+    onCheckUpdates: () -> Unit,
+) {
     var now by remember { mutableLongStateOf(Clock.now()) }
     val text = LocalUiText.current
     val context = LocalContext.current
+    val stateHolder = rememberSaveableStateHolder()
     val scrollBehavior = MiuixScrollBehavior()
 
     val notificationPermission = rememberLauncherForActivityResult(
@@ -51,10 +58,17 @@ fun AppShell(controller: WorkspaceController) {
     LaunchedEffect(Unit) {
         controller.ensureSystemState()
         if (controller.isActive) controller.toast = text.restored
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    }
+
+    LaunchedEffect(controller.isRunning, controller.state.settings.notifications) {
+        if (controller.isRunning && controller.state.settings.notifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
-            if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            val preferences = context.getSharedPreferences("device_preferences", android.content.Context.MODE_PRIVATE)
+            if (!granted && !preferences.getBoolean("asked_notifications", false)) {
+                preferences.edit().putBoolean("asked_notifications", true).apply()
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 
@@ -70,7 +84,7 @@ fun AppShell(controller: WorkspaceController) {
             val current = Clock.now()
             now = current
             controller.tick(current)
-            delay(200)
+            delay(if (controller.isRunning) 200 else 1_000)
         }
     }
 
@@ -112,10 +126,12 @@ fun AppShell(controller: WorkspaceController) {
             },
             label = "page",
         ) { tab ->
-            when (tab) {
-                WorkspaceTab.TIMER -> TimerScreen(controller, now, scrollBehavior, padding)
-                WorkspaceTab.STATS -> StatsScreen(controller, now, scrollBehavior, padding)
-                WorkspaceTab.SETTINGS -> SettingsScreen(controller, scrollBehavior, padding)
+            stateHolder.SaveableStateProvider("${controller.account ?: "guest"}:${tab.name}") {
+                when (tab) {
+                    WorkspaceTab.TIMER -> TimerScreen(controller, now, scrollBehavior, padding)
+                    WorkspaceTab.STATS -> StatsScreen(controller, now / 60_000 * 60_000, scrollBehavior, padding)
+                    WorkspaceTab.SETTINGS -> SettingsScreen(controller, scrollBehavior, padding, keepScreenOn, onKeepScreenOn, onCheckUpdates)
+                }
             }
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,9 +44,11 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
     val state = controller.state
     val text = LocalUiText.current
     val en = state.settings.language == Language.EN
-    var period by remember { mutableStateOf(StatisticsPeriod.WEEK) }
-    var offset by remember { mutableIntStateOf(0) }
-    var selected by remember { mutableStateOf<LocalDate?>(null) }
+    var period by rememberSaveable { mutableStateOf(StatisticsPeriod.WEEK) }
+    var offset by rememberSaveable { mutableIntStateOf(0) }
+    var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = selectedDate?.let(LocalDate::parse)
+    var filterIndex by rememberSaveable { mutableIntStateOf(0) }
     var deletingRecord by remember { mutableStateOf<FocusRecord?>(null) }
     val today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
     val days = remember(today, period, offset) { statisticsDays(today, period, offset) }
@@ -62,7 +65,13 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
         streak++
         streakDay = streakDay.minusDays(1)
     }
-    val visibleRecords = if (selected == null) records else recordsInDays(state.records, listOf(selected!!)).sortedByDescending { it.start }
+    val selectedRecords = remember(state.records, selected, records) {
+        if (selected == null) records else recordsInDays(state.records, listOf(selected)).sortedByDescending { it.start }
+    }
+    val visibleRecords = remember(selectedRecords, filterIndex) {
+        if (filterIndex == 0) selectedRecords
+        else selectedRecords.filter { it.mode == Mode.entries[filterIndex - 1] }
+    }
     fun duration(value: Long): String = if (en) {
         when { value >= 3600 -> "${value / 3600}h ${(value % 3600) / 60}m"; value >= 60 -> "${value / 60}m"; else -> "${value}s" }
     } else formatDuration(value)
@@ -94,18 +103,18 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
             item {
                 TabRowWithContour(
                     listOf(text.rangeDay, text.rangeWeek, text.rangeMonth), period.ordinal,
-                    { index -> period = StatisticsPeriod.entries[index]; offset = 0; selected = null },
+                    { index -> period = StatisticsPeriod.entries[index]; offset = 0; selectedDate = null },
                     modifier = Modifier.fillMaxWidth(),
                     indication = null,
                 )
             }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { offset--; selected = null }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { offset--; selectedDate = null }, modifier = Modifier.size(48.dp)) {
                         Icon(OutlineIcons.Previous, contentDescription = if (en) "Previous period" else "上一时段", tint = colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
                     Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f), maxLines = 1)
-                    IconButton(onClick = { offset++; selected = null }, enabled = offset < 0, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { offset++; selectedDate = null }, enabled = offset < 0, modifier = Modifier.size(48.dp)) {
                         Icon(OutlineIcons.Next, contentDescription = if (en) "Next period" else "下一时段", tint = colorScheme.primary.copy(alpha = if (offset < 0) 1f else 0.3f), modifier = Modifier.size(18.dp))
                     }
                 }
@@ -127,7 +136,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                         Row(Modifier.fillMaxWidth().height(135.dp), horizontalArrangement = Arrangement.spacedBy(if (chart.size > 14) 2.dp else 8.dp), verticalAlignment = Alignment.Bottom) {
                             chart.forEachIndexed { index, value ->
                                 val date = if (period == StatisticsPeriod.DAY) days.first() else days[index]
-                                Box(Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = "${if (period == StatisticsPeriod.DAY) "$index:00" else date.toString()} ${duration(value)}" }.clickable { selected = if (selected == date) null else date }, contentAlignment = Alignment.BottomCenter) {
+                                Box(Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = "${if (period == StatisticsPeriod.DAY) "$index:00" else date.toString()} ${duration(value)}" }.clickable { selectedDate = if (selected == date) null else date.toString() }, contentAlignment = Alignment.BottomCenter) {
                                     Box(Modifier.fillMaxWidth().height((130f * value / max).coerceAtLeast(3f).dp).background(if (value > 0) colorScheme.primary.copy(alpha = if (selected == null || selected == date) 0.85f else 0.3f) else colorScheme.surfaceVariant, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
                                 }
                             }
@@ -190,7 +199,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                                             val date = month.withDayOfMonth(day)
                                             val value = totals[date.toString()] ?: 0L
                                             val active = selected == date
-                                            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(if (active) colorScheme.primary else if (value > 0) colorScheme.primary.copy(alpha = 0.18f + 0.35f * (value.toFloat() / (state.settings.dailyGoal.coerceAtLeast(1) * 60)).coerceIn(0f, 1f)) else colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).semantics { contentDescription = "${date} ${duration(value)}" }.clickable { selected = if (active) null else date }, contentAlignment = Alignment.Center) {
+                                            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(if (active) colorScheme.primary else if (value > 0) colorScheme.primary.copy(alpha = 0.18f + 0.35f * (value.toFloat() / (state.settings.dailyGoal.coerceAtLeast(1) * 60)).coerceIn(0f, 1f)) else colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).semantics { contentDescription = "${date} ${duration(value)}" }.clickable { selectedDate = if (active) null else date.toString() }, contentAlignment = Alignment.Center) {
                                                 Text("$day", color = if (active) colorScheme.surface else colorScheme.onSurface, fontSize = 13.sp)
                                             }
                                         }
@@ -206,9 +215,24 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                     Column(Modifier.fillMaxWidth().padding(20.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(selected?.toString() ?: if (en) "Focus history" else "专注记录", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                            if (selected != null) TextButton(text = if (en) "Clear" else "清除筛选", onClick = { selected = null })
+                            if (selected != null) TextButton(text = if (en) "Clear" else "清除筛选", onClick = { selectedDate = null })
                         }
-                        Spacer(Modifier.height(18.dp))
+                        if (selected != null) {
+                            Text(duration(totals[selected.toString()] ?: 0L) + " · " +
+                                if (en) "${selectedRecords.size} sessions" else "${selectedRecords.size} 次专注",
+                                color = colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        if (selectedRecords.isNotEmpty() || filterIndex != 0) {
+                            TabRowWithContour(
+                                listOf(if (en) "All" else "全部", text.filterCountdown, text.filterStopwatch),
+                                filterIndex,
+                                { filterIndex = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                indication = null,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
                         if (visibleRecords.isEmpty()) {
                             Text(if (en) "No focus records yet" else "暂无专注记录", modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), textAlign = TextAlign.Center, color = colorScheme.onSurfaceVariantSummary)
                         } else visibleRecords.forEachIndexed { index, record ->

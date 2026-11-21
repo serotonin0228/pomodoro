@@ -53,15 +53,15 @@ object TimerNotifications {
                 builder.setContentText("已专注 ${clock(elapsed(timer, now))}")
             }
             builder.addAction(
-                action(context, TimerActionReceiver.ACTION_PAUSE, "暂停", 1),
+                action(context, TimerActionReceiver.ACTION_PAUSE, "暂停", 1, timer.id),
             )
         } else {
             builder.setContentText("已暂停 · ${clock(displayNow(timer, now))}")
             builder.addAction(
-                action(context, TimerActionReceiver.ACTION_RESUME, "继续", 2),
+                action(context, TimerActionReceiver.ACTION_RESUME, "继续", 2, timer.id),
             )
         }
-        builder.addAction(action(context, TimerActionReceiver.ACTION_STOP, "结束", 3))
+        builder.addAction(action(context, TimerActionReceiver.ACTION_STOP, "结束", 3, timer.id))
         return builder.build()
     }
 
@@ -91,8 +91,10 @@ object TimerNotifications {
         )
     }
 
-    private fun action(context: Context, action: String, label: String, code: Int): Notification.Action {
+    private fun action(context: Context, action: String, label: String, code: Int, timerId: String): Notification.Action {
         val intent = Intent(context, TimerActionReceiver::class.java).setAction(action)
+            .setData(android.net.Uri.fromParts("pomodoro-timer", timerId, null))
+            .putExtra(TimerActionReceiver.EXTRA_TIMER_ID, timerId)
         val pending = PendingIntent.getBroadcast(
             context,
             code,

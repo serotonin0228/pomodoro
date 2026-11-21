@@ -41,6 +41,16 @@ import java.io.File
 class MusicService : Service() {
 
     private var player: MediaPlayer? = null
+    private var preparing = false
+    private var playWhenPrepared = false
+    private val playbackAccount by lazy { WorkspaceStore(this).activeAccount() }
+    private val playbackPrefs by lazy { getSharedPreferences("music_playback", MODE_PRIVATE) }
+    private fun playbackKey(key: String) = "${playbackAccount ?: "guest"}:$key"
+    private val unplugReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) pause()
+        }
+    }
     private var session: MediaSession? = null
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
@@ -68,6 +78,8 @@ class MusicService : Service() {
         super.onCreate()
         audioManager = getSystemService(AudioManager::class.java)
         NotificationChannels.ensure(this)
+        androidx.core.content.ContextCompat.registerReceiver(this, unplugReceiver,
+            IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         runningService = this
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val filter = IntentFilter().apply {
@@ -91,6 +103,10 @@ class MusicService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // A media foreground service must promote itself before preparing audio.
+        if (WorkspaceStore(this).activeAccount() != playbackAccount) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (intent?.action != ACTION_STOP) {
             startForegroundCompat(notification(titles.getOrNull(index).orEmpty()))
         }
@@ -98,7 +114,7 @@ class MusicService : Service() {
             MusicRepository.loadQueue(this)?.let { saved ->
                 paths = saved.paths
                 titles = saved.titles
-                index = if (paths.isEmpty()) 0 else getSharedPreferences("music_playback", MODE_PRIVATE).getInt("index", 0).coerceIn(0, paths.lastIndex)
+                index = if (paths.isEmpty()) 0 else playbackPrefs.getInt(playbackKey("index"), 0).coerceIn(0, paths.lastIndex)
             }
         }
         when (intent?.action) {
@@ -137,11 +153,11 @@ class MusicService : Service() {
             ACTION_STOP -> { releasePlayer(); stopForegroundCompat(); stopSelf() }
             null -> {
                 val saved = MusicRepository.loadQueue(this)
-                val prefs = getSharedPreferences("music_playback", MODE_PRIVATE)
-                if (prefs.getBoolean("playing", false) && saved != null && saved.paths.isNotEmpty()) {
+                val prefs = playbackPrefs
+                if (prefs.getBoolean(playbackKey("playing"), false) && saved != null && saved.paths.isNotEmpty()) {
                     paths = saved.paths
                     titles = saved.titles
-                    index = prefs.getInt("index", 0).coerceIn(0, paths.lastIndex)
+                    index = prefs.getInt(playbackKey("index"), 0).coerceIn(0, paths.lastIndex)
                     startTrack()
                 } else { stopForegroundCompat(); stopSelf() }
             }
@@ -150,7 +166,7 @@ class MusicService : Service() {
     }
 
     private fun currentMode(): MusicMode =
-        WorkspaceStore(this).load(null)?.state?.settings?.musicMode ?: MusicMode.SINGLE
+        WorkspaceStore(this).loadActive()?.state?.settings?.musicMode ?: MusicMode.SINGLE
 
     private fun syncQueue() {
         val saved = MusicRepository.loadQueue(this) ?: return
@@ -172,7 +188,7 @@ class MusicService : Service() {
     private fun startTrack(failures: Int = 0) {
         releasePlayer()
         if (paths.isEmpty() || failures >= paths.size) {
-            getSharedPreferences("music_playback", MODE_PRIVATE).edit().putBoolean("playing", false).apply()
+            playbackPrefs.edit().putBoolean(playbackKey("playing"), false).apply()
             stopForegroundCompat(); stopSelf(); return
         }
         val path = paths.getOrNull(index)
@@ -183,32 +199,50 @@ class MusicService : Service() {
         }
         if (!requestFocus()) { playing = false; publish(); return }
         val mediaPlayer = MediaPlayer()
+        player = mediaPlayer
+        preparing = true
+        playWhenPrepared = true
         try {
             mediaPlayer.setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
             mediaPlayer.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
             mediaPlayer.setDataSource(path)
-            mediaPlayer.setOnCompletionListener { next(automatic = true) }
-            mediaPlayer.setOnErrorListener { _, _, _ ->
-                index = (index + 1) % paths.size
-                mainHandler.post { startTrack(failures + 1) }
+            mediaPlayer.setOnCompletionListener { if (player === it) next(automatic = true) }
+            mediaPlayer.setOnErrorListener { source, _, _ ->
+                retryTrack(source, failures)
                 true
             }
-            mediaPlayer.prepare()
-            mediaPlayer.start()
-            player = mediaPlayer
-            playing = true
-            resumeOnFocusGain = false
-            publish()
+            mediaPlayer.setOnPreparedListener { source ->
+                if (player !== source) return@setOnPreparedListener
+                preparing = false
+                if (playWhenPrepared) {
+                    if (runCatching { source.start() }.isFailure) {
+                        retryTrack(source, failures)
+                        return@setOnPreparedListener
+                    }
+                    playing = true
+                    resumeOnFocusGain = false
+                }
+                publish()
+            }
+            mediaPlayer.prepareAsync()
         } catch (_: Exception) {
-            runCatching { mediaPlayer.release() }
-            index = (index + 1) % paths.size
-            mainHandler.post { startTrack(failures + 1) }
+            retryTrack(mediaPlayer, failures)
         }
+    }
+
+    private fun retryTrack(source: MediaPlayer, failures: Int) {
+        if (player !== source) return
+        val shouldContinue = playWhenPrepared || playing
+        releasePlayer()
+        if (!shouldContinue || paths.isEmpty()) { publish(); return }
+        index = (index + 1) % paths.size
+        mainHandler.post { if (player == null) startTrack(failures + 1) }
     }
 
     private fun resume() {
         val current = player ?: run { startTrack(); return }
         if (!requestFocus()) return
+        if (preparing) { playWhenPrepared = true; return }
         if (runCatching { current.start() }.isSuccess) {
             playing = true
             resumeOnFocusGain = false
@@ -217,7 +251,8 @@ class MusicService : Service() {
     }
 
     private fun pause(transient: Boolean = false) {
-        runCatching { player?.pause() }
+        playWhenPrepared = false
+        if (!preparing) runCatching { player?.pause() }
         playing = false
         resumeOnFocusGain = transient
         publish()
@@ -244,14 +279,12 @@ class MusicService : Service() {
     }
 
     private fun releasePlayer() {
-        runCatching {
-            player?.let {
-                if (it.isPlaying) it.stop()
-                it.release()
-            }
-        }
+        val previous = player
         player = null
+        preparing = false
+        playWhenPrepared = false
         playing = false
+        runCatching { previous?.release() }
     }
 
     // ------------------------------------------------------------ publish state
@@ -267,7 +300,7 @@ class MusicService : Service() {
         MusicPlayback.title = title
         MusicPlayback.path = paths.getOrNull(index).orEmpty()
         MusicPlayback.playing = playing
-        getSharedPreferences("music_playback", MODE_PRIVATE).edit().putBoolean("playing", playing || resumeOnFocusGain).putInt("index", index).apply()
+        playbackPrefs.edit().putBoolean(playbackKey("playing"), playing || resumeOnFocusGain).putInt(playbackKey("index"), index).apply()
         session?.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, title)
@@ -283,7 +316,7 @@ class MusicService : Service() {
                 )
                 .setState(
                     if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
-                    (player?.currentPosition ?: 0).toLong(),
+                    if (preparing) 0L else runCatching { player?.currentPosition?.toLong() ?: 0L }.getOrDefault(0L),
                     1f,
                 )
                 .build(),
@@ -360,10 +393,11 @@ class MusicService : Service() {
                 .setOnAudioFocusChangeListener { change ->
                     when (change) {
                         AudioManager.AUDIOFOCUS_LOSS -> pause()
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> if (playing) pause(transient = true)
+                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> if (playing || playWhenPrepared) pause(transient = true)
                         AudioManager.AUDIOFOCUS_GAIN -> if (resumeOnFocusGain) {
                             resumeOnFocusGain = false
-                            if (runCatching { player?.start() }.isSuccess && player != null) { playing = true; publish() }
+                            if (preparing) playWhenPrepared = true
+                            else if (runCatching { player?.start() }.isSuccess && player != null) { playing = true; publish() }
                         }
                     }
                 }.build().also { focusRequest = it }
@@ -382,6 +416,7 @@ class MusicService : Service() {
     override fun onDestroy() {
         if (runningService === this) runningService = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) runCatching { unregisterReceiver(notificationSettingsReceiver) }
+        runCatching { unregisterReceiver(unplugReceiver) }
         mainHandler.removeCallbacksAndMessages(null)
         MusicPlayback.playing = false
         MusicPlayback.title = ""

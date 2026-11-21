@@ -1,0 +1,10 @@
+<full-backup-content>
+    <exclude domain="sharedpref" path="cloud.xml" />
+    <exclude domain="sharedpref" path="pomodoro.workspace.v1.xml" />
+    <exclude domain="sharedpref" path="timer_mode_drafts.xml" />
+    <exclude domain="sharedpref" path="music.xml" />
+    <exclude domain="sharedpref" path="music_catalogue.xml" />
+    <exclude domain="sharedpref" path="music_playback.xml" />
+    <exclude domain="sharedpref" path="focus-guard.xml" />
+    <exclude domain="file" path="music/" />
+</full-backup-content>

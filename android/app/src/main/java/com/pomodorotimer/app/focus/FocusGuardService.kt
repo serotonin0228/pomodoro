@@ -5,6 +5,7 @@ import com.pomodorotimer.app.MainActivity
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.KeyguardManager
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -24,10 +25,15 @@ class FocusGuardService : AccessibilityService() {
   private var usageAt = 0L
   private var redirectedAt = -2000L
   private var launchPending: Runnable? = null
+  private val preferences by lazy { FocusGuardStore.prefs(this) }
+  private val focusChanges = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+    if (key == "status" || key == "enabled" || key == "deadline" || key == "phase" || key == null) restartTicker()
+  }
   private val ticker = object : Runnable {
     override fun run() {
+      if (!FocusGuardStore.isActive(this@FocusGuardService)) return
       try {
-        if (FocusGuardStore.isActive(this@FocusGuardService) && interactive()) {
+        if (interactive()) {
           val now = System.currentTimeMillis()
           FocusGuardUsage.latest(this@FocusGuardService, usageAt, now)?.let {
             usageAt = it.at
@@ -36,7 +42,7 @@ class FocusGuardService : AccessibilityService() {
           enforce()
         }
       } catch (e: Exception) { FocusGuardDiagnostics.lastError = e.javaClass.simpleName }
-      handler.postDelayed(this, 400)
+      handler.postDelayed(this, if (interactive()) 400 else 1_000)
     }
   }
   override fun onServiceConnected() {
@@ -48,7 +54,12 @@ class FocusGuardService : AccessibilityService() {
     }
     connected = true
     try { refreshApps() } catch (e: Exception) { FocusGuardDiagnostics.lastError = e.javaClass.simpleName }
-    handler.removeCallbacks(ticker); handler.post(ticker)
+    preferences.registerOnSharedPreferenceChangeListener(focusChanges)
+    restartTicker()
+  }
+  private fun restartTicker() {
+    handler.removeCallbacks(ticker)
+    if (connected && FocusGuardStore.isActive(this)) handler.post(ticker)
   }
   private fun refreshApps() {
     essential = FocusGuardApps.essential(this)
@@ -93,5 +104,10 @@ class FocusGuardService : AccessibilityService() {
     handler.postDelayed(launch, 180)
   }
   override fun onInterrupt() { }
-  override fun onDestroy() { handler.removeCallbacksAndMessages(null); connected = false; super.onDestroy() }
+  override fun onDestroy() {
+    preferences.unregisterOnSharedPreferenceChangeListener(focusChanges)
+    handler.removeCallbacksAndMessages(null)
+    connected = false
+    super.onDestroy()
+  }
 }

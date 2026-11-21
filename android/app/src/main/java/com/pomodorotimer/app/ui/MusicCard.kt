@@ -51,6 +51,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Clear
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Playlist
 import top.yukonga.miuix.kmp.icon.extended.Pause
@@ -83,7 +84,7 @@ fun MusicCard(controller: WorkspaceController) {
         mutableStateOf(cached ?: legacy)
     }
     val queueRevision = MusicDownloads.queueRevision
-    val queue = remember(queueRevision) { MusicRepository.loadQueue(context) }
+    val queue = remember(controller.account, queueRevision) { MusicRepository.loadQueue(context) }
     var status by remember { mutableStateOf("") }
 
     LaunchedEffect(session?.userId) {
@@ -158,8 +159,11 @@ fun MusicCard(controller: WorkspaceController) {
                 onClick = { if (isPlayingTrack) MusicService.pause(context) else playTrack(track) },
                 endActions = {
                     if (download?.active == true) {
-                        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(progress = download.progress, size = 22.dp, modifier = Modifier.size(22.dp))
+                        IconButton(onClick = { MusicDownloads.cancel(track.id) }, modifier = Modifier.size(48.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(progress = download.progress, size = 30.dp, modifier = Modifier.size(30.dp))
+                                Icon(imageVector = MiuixIcons.Clear, contentDescription = if (controller.state.settings.language == com.pomodorotimer.app.domain.Language.EN) "Cancel download" else "取消下载", modifier = Modifier.size(15.dp))
+                            }
                         }
                     } else {
                         IconButton(onClick = { if (isPlayingTrack) MusicService.pause(context) else playTrack(track) }, modifier = Modifier.size(48.dp)) {

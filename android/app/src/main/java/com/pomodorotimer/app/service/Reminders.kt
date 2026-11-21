@@ -26,16 +26,17 @@ object Reminders {
     fun sync(context: Context, timer: TimerSession) {
         cancel(context)
         if (timer.status != TimerStatus.RUNNING || timer.mode != Mode.COUNTDOWN) return
-        val triggerAt = countdownDeadline(timer, Clock.correction()) ?: return
+        val deadline = countdownDeadline(timer, 0L) ?: return
+        val triggerAt = android.os.SystemClock.elapsedRealtime() + (deadline - Clock.now()).coerceAtLeast(0L)
 
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
-        val pending = pendingIntent(context)
+        val pending = pendingIntent(context, timer.id)
         val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
         runCatching {
             if (exactAllowed) {
-                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+                manager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pending)
             } else {
-                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+                manager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pending)
             }
         }
     }
@@ -45,8 +46,9 @@ object Reminders {
         manager.cancel(pendingIntent(context))
     }
 
-    private fun pendingIntent(context: Context): PendingIntent {
+    private fun pendingIntent(context: Context, timerId: String? = null): PendingIntent {
         val intent = Intent(context, TimerAlarmReceiver::class.java)
+            .putExtra(TimerActionReceiver.EXTRA_TIMER_ID, timerId)
         return PendingIntent.getBroadcast(
             context,
             REQUEST_CODE,

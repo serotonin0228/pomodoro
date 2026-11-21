@@ -2,6 +2,7 @@ package com.pomodorotimer.app.data
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
@@ -51,8 +52,10 @@ class MusicClient(
         track: MusicTrack,
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): File? = withContext(Dispatchers.IO) {
-        val dir = File(context.filesDir, "music").apply { mkdirs() }
-        val file = File(dir, "${track.id}-${track.revision}.mp3")
+        val account = java.util.UUID.fromString(session.userId).toString()
+        val trackId = java.util.UUID.fromString(track.id).toString()
+        val dir = File(context.filesDir, "music/$account").apply { mkdirs() }
+        val file = File(dir, "$trackId-${track.revision}.mp3")
         if (file.exists() && file.length() > 0) return@withContext file
 
         val connection = (URL(
@@ -68,7 +71,7 @@ class MusicClient(
         }
         try {
             if (connection.responseCode !in 200..299) return@withContext null
-            val partial = File(dir, "${track.id}-${track.revision}.part")
+            val partial = File.createTempFile("track-", ".part", dir)
             try {
                 val total = connection.contentLengthLong
                 connection.inputStream.use { input ->
@@ -76,6 +79,7 @@ class MusicClient(
                         val buffer = ByteArray(32 * 1024)
                         var copied = 0L
                         while (true) {
+                            ensureActive()
                             val count = input.read(buffer)
                             if (count < 0) break
                             output.write(buffer, 0, count)
@@ -84,6 +88,7 @@ class MusicClient(
                         }
                     }
                 }
+                ensureActive()
                 if (total > 0 && partial.length() != total) return@withContext null
                 if (partial.length() == 0L || !partial.renameTo(file)) return@withContext null
                 file

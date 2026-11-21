@@ -40,6 +40,7 @@ import top.yukonga.miuix.kmp.icon.extended.Stopwatch
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
@@ -56,6 +57,9 @@ fun SettingsScreen(
     controller: WorkspaceController,
     scrollBehavior: ScrollBehavior,
     padding: PaddingValues,
+    keepScreenOn: Boolean,
+    onKeepScreenOn: (Boolean) -> Unit,
+    onCheckUpdates: () -> Unit,
 ) {
     val settings = controller.state.settings
     val text = LocalUiText.current
@@ -233,6 +237,12 @@ fun SettingsScreen(
         item { SettingsHeading(text.sectionAppearance) }
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
+                SwitchPreference(
+                    title = if (settings.language == Language.EN) "Keep timer screen awake" else "计时页面保持常亮",
+                    startAction = { PreferenceIcon(OutlineIcons.Clock) },
+                    checked = keepScreenOn,
+                    onCheckedChange = onKeepScreenOn,
+                )
                 OverlayDropdownPreference(
                     items = listOf(text.themeSystem, text.themeLight, text.themeDark),
                     selectedIndex = settings.theme.ordinal,
@@ -258,6 +268,16 @@ fun SettingsScreen(
 
         item { SettingsHeading(text.sectionAppLimits) }
         item { FocusGuardCard(controller) }
+        if (!com.pomodorotimer.app.BuildConfig.DEBUG) item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ArrowPreference(
+                    title = if (settings.language == Language.EN) "Check for updates" else "检查更新",
+                    summary = "v${com.pomodorotimer.app.BuildConfig.VERSION_NAME}",
+                    startAction = { PreferenceIcon(OutlineIcons.Cloud) },
+                    onClick = onCheckUpdates,
+                )
+            }
+        }
     }
     }
 }

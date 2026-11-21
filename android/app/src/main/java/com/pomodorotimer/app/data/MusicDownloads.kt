@@ -13,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
 import java.io.File
 
 /** Downloads survive dismissal of the music panel for as long as the app process remains alive. */
@@ -24,11 +26,32 @@ object MusicDownloads {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
 
+    private val jobs = mutableMapOf<String, Job>()
+    private var generation = 0L
+
+    fun cancelAll() {
+        generation++
+        val activeJobs = jobs.values.toList()
+        jobs.clear()
+        activeJobs.forEach { it.cancel() }
+        statuses.clear()
+        queueRevision++
+    }
+
+    fun cancel(trackId: String) {
+        jobs.remove(trackId)?.cancel()
+        statuses.remove(trackId)
+    }
+
     fun start(context: Context, track: MusicTrack, session: CloudClient.Session, catalogue: List<MusicTrack>) {
         if (statuses[track.id]?.active == true) return
         val app = context.applicationContext
+        if (WorkspaceStore(app).activeAccount() != session.userId) return
+        val requestGeneration = generation
         statuses[track.id] = Status(active = true)
-        scope.launch {
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            val ownJob = coroutineContext[Job]
+            fun current() = requestGeneration == generation && jobs[track.id] === ownJob
             try {
                 val client = MusicClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
                 var lastUpdate = 0L
@@ -37,12 +60,13 @@ object MusicDownloads {
                     if (now - lastUpdate >= 100 || (total > 0 && bytes >= total)) {
                         lastUpdate = now
                         handler.post {
-                            if (statuses[track.id]?.active == true) {
+                            if (current() && statuses[track.id]?.active == true) {
                                 statuses[track.id] = Status(true, if (total > 0) (bytes.toFloat() / total).coerceIn(0f, 1f) else null)
                             }
                         }
                     }
                 } ?: throw IllegalStateException("Download failed")
+                if (!current() || WorkspaceStore(app).activeAccount() != session.userId) return@launch
                 val existing = MusicRepository.loadQueue(app)
                 val entries = existing?.trackIds?.mapIndexedNotNull { i, id ->
                     val path = existing.paths.getOrNull(i)
@@ -55,11 +79,15 @@ object MusicDownloads {
                 queueRevision++
                 statuses.remove(track.id)
             } catch (cancel: CancellationException) {
-                statuses.remove(track.id)
+                if (current()) statuses.remove(track.id)
                 throw cancel
             } catch (_: Exception) {
-                statuses[track.id] = Status(active = false, failed = true)
+                if (current()) statuses[track.id] = Status(active = false, failed = true)
+            } finally {
+                if (current()) jobs.remove(track.id)
             }
         }
+        jobs[track.id] = job
+        job.start()
     }
 }

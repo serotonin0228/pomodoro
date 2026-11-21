@@ -76,4 +76,16 @@ class WorkspaceMergeTest {
         assertEquals(local.settings, mergePendingWorkspace(local, oldCloud).settings)
         assertEquals(local.timer, mergePendingWorkspace(local, oldCloud).timer)
     }
+    @Test fun staleCompletionDoesNotCreateHistoryWhileNewOwnerIsRunning() {
+        val local = initialState("first", 1_000)
+        val running = local.copy(timer = local.timer.copy(status = TimerStatus.RUNNING, startedAt = 1_000))
+        val claimed = claimTimer(running, "second", 45_000)
+        val staleCompletion = finishState(running, 61_000, completed = false)
+
+        val merged = mergeRemoteTimer(staleCompletion, claimed, false)
+
+        assertEquals(claimed.timer, merged.timer)
+        assertEquals(emptyList<FocusRecord>(), merged.records)
+    }
+
 }
