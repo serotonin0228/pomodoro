@@ -223,14 +223,6 @@ class WorkspaceController(context: Context) {
         commit(state.copy(settings = next, timer = timer, updatedAt = now))
     }
 
-    fun restoreHistory(records: List<com.pomodorotimer.app.domain.FocusRecord>, expectedAccount: String?): Int {
-        check(account == expectedAccount && store.activeAccount() == expectedAccount)
-        val merged = com.pomodorotimer.app.domain.mergeRecords(state.records, records)
-        val added = merged.count { !it.deleted } - state.records.count { !it.deleted }
-        if (merged != state.records) commit(state.copy(records = merged, updatedAt = Clock.now()))
-        return added
-    }
-
     fun deleteRecord(id: String) {
         val now = Clock.now()
         commit(

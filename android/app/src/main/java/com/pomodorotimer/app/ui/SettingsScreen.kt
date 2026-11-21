@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import com.pomodorotimer.app.BuildConfig
 import com.pomodorotimer.app.domain.GoalType
 import com.pomodorotimer.app.domain.Language
 import com.pomodorotimer.app.domain.ThemeMode
@@ -268,15 +269,17 @@ fun SettingsScreen(
 
         item { SettingsHeading(text.sectionAppLimits) }
         item { FocusGuardCard(controller) }
-        item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                HistoryBackup(controller, settings.language == Language.EN)
-                if (!com.pomodorotimer.app.BuildConfig.DEBUG) ArrowPreference(
-                    title = if (settings.language == Language.EN) "Check for updates" else "检查更新",
-                    summary = "v${com.pomodorotimer.app.BuildConfig.VERSION_NAME}",
-                    startAction = { PreferenceIcon(OutlineIcons.Cloud) },
-                    onClick = onCheckUpdates,
-                )
+        if (!BuildConfig.DEBUG) {
+            item { SettingsHeading(text.sectionAbout) }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    ArrowPreference(
+                        title = text.checkForUpdates,
+                        summary = "v${BuildConfig.VERSION_NAME}",
+                        startAction = { PreferenceIcon(OutlineIcons.Cloud) },
+                        onClick = onCheckUpdates,
+                    )
+                }
             }
         }
     }

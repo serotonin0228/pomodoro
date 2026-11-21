@@ -45,31 +45,6 @@ object StateCodec {
         )
     }.getOrNull()
 
-    fun encodeHistory(records: List<FocusRecord>): String = JSONObject()
-        .put("format", "pomodoro.history")
-        .put("version", 1)
-        .put("records", JSONArray().apply { records.filterNot { it.deleted }.forEach { put(recordToJson(it)) } })
-        .toString()
-
-    fun decodeHistory(text: String): List<FocusRecord> {
-        val root = JSONObject(text)
-        require(root.getString("format") == "pomodoro.history" && root.getInt("version") == 1)
-        val records = root.getJSONArray("records")
-        require(records.length() <= 25_000)
-        return List(records.length()) { index ->
-            val entry = records.getJSONObject(index)
-            val record = recordFromJson(entry)
-            val maxTime = 4_102_444_800_000L // 2100-01-01
-            require(entry.getString("mode") in setOf("countdown", "stopwatch"))
-            require(record.id.isNotBlank() && record.id.length <= 128)
-            require(record.start in 1..maxTime && record.end in record.start..maxTime)
-            require(record.seconds >= 0L && record.seconds <= (record.end - record.start) / 1000L)
-            require(record.segments.size in 1..10_000 && !record.deleted)
-            require(record.segments.all { it.start in record.start..record.end && it.end in it.start..record.end })
-            record
-        }.also { list -> require(list.distinctBy { it.id }.size == list.size) }
-    }
-
     // ------------------------------------------------------------ timer
 
     private fun timerToJson(t: TimerSession) = JSONObject().apply {
