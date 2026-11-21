@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import androidx.core.app.NotificationCompat
 import com.pomodorotimer.app.MainActivity
 import com.pomodorotimer.app.R
@@ -41,6 +42,7 @@ object TimerNotifications {
         val value = clock(displaySeconds(timer, now))
         val builder = NotificationCompat.Builder(context, NotificationChannels.ONGOING)
             .setSmallIcon(R.drawable.ic_stat_timer)
+            .setColor(Color.BLACK)
             .setContentTitle(title)
             .setContentText(value)
             .setContentIntent(openApp(context))
@@ -76,6 +78,7 @@ object TimerNotifications {
         val title = if (phase == Phase.FOCUS) "专注完成" else "休息结束"
         return Notification.Builder(context, if (sound) NotificationChannels.FINISHED else NotificationChannels.FINISHED_SILENT)
             .setSmallIcon(R.drawable.ic_stat_timer)
+            .setColor(Color.BLACK)
             .setContentTitle(title)
             .setContentText("打开番茄钟查看本次记录")
             .setAutoCancel(true)
