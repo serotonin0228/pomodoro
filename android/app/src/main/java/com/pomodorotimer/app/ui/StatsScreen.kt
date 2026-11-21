@@ -29,6 +29,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.sqrt
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -244,12 +245,8 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                                             val active = selected == date
                                             val shape = RoundedCornerShape(10.dp)
                                             val background = if (value == 0L) colorScheme.surfaceVariant else {
-                                                val intensity = when {
-                                                    value < 15 * 60L -> 0.13f
-                                                    value < 45 * 60L -> 0.26f
-                                                    value < 90 * 60L -> 0.40f
-                                                    else -> 0.55f
-                                                }
+                                                val fraction = (value / (4 * 3600f)).coerceAtMost(1f)
+                                                val intensity = 0.11f + 0.44f * sqrt(fraction)
                                                 colorScheme.primary.copy(alpha = intensity).compositeOver(colorScheme.surface)
                                             }
                                             val foreground = when {
