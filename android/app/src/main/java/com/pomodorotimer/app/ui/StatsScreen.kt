@@ -245,10 +245,10 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                                             val shape = RoundedCornerShape(10.dp)
                                             val background = if (value == 0L) colorScheme.surfaceVariant else {
                                                 val intensity = when {
-                                                    value < 15 * 60L -> 0.22f
-                                                    value < 45 * 60L -> 0.46f
-                                                    value < 90 * 60L -> 0.73f
-                                                    else -> 1f
+                                                    value < 15 * 60L -> 0.13f
+                                                    value < 45 * 60L -> 0.26f
+                                                    value < 90 * 60L -> 0.40f
+                                                    else -> 0.55f
                                                 }
                                                 colorScheme.primary.copy(alpha = intensity).compositeOver(colorScheme.surface)
                                             }
