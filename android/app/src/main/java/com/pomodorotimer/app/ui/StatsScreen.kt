@@ -1,6 +1,7 @@
 package com.pomodorotimer.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,8 +12,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -120,7 +125,7 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
         ) {
             item {
                 TabRowWithContour(
-                    listOf(text.rangeDay, text.rangeWeek, text.rangeMonth, if (en) "Custom" else "自选"),
+                    listOf(text.rangeDay, text.rangeWeek, text.rangeMonth, text.rangeCustom),
                     if (custom != null) 3 else period.ordinal,
                     { index ->
                         if (index == 3) {
@@ -237,8 +242,34 @@ fun StatsScreen(controller: WorkspaceController, now: Long, scrollBehavior: Scro
                                             val date = month.withDayOfMonth(day)
                                             val value = totals[date.toString()] ?: 0L
                                             val active = selected == date
-                                            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(if (active) colorScheme.primary else if (value > 0) colorScheme.primary.copy(alpha = 0.18f + 0.35f * (value.toFloat() / (state.settings.dailyGoal.coerceAtLeast(1) * 60)).coerceIn(0f, 1f)) else colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).semantics { contentDescription = "${date} ${duration(value)}" }.clickable { selectedDate = if (active) null else date.toString() }, contentAlignment = Alignment.Center) {
-                                                Text("$day", color = if (active) colorScheme.surface else colorScheme.onSurface, fontSize = 13.sp)
+                                            val shape = RoundedCornerShape(10.dp)
+                                            val background = if (value == 0L) colorScheme.surfaceVariant else {
+                                                val intensity = when {
+                                                    value < 15 * 60L -> 0.22f
+                                                    value < 45 * 60L -> 0.46f
+                                                    value < 90 * 60L -> 0.73f
+                                                    else -> 1f
+                                                }
+                                                colorScheme.primary.copy(alpha = intensity).compositeOver(colorScheme.surface)
+                                            }
+                                            val foreground = when {
+                                                value == 0L -> colorScheme.onSurface
+                                                background.luminance() > 0.179f -> Color.Black
+                                                else -> Color.White
+                                            }
+                                            val selection = if (active) Modifier.border(2.dp, foreground, shape) else Modifier
+                                            Box(
+                                                modifier = Modifier.size(36.dp).clip(shape)
+                                                    .background(background)
+                                                    .then(selection)
+                                                    .semantics {
+                                                        contentDescription = "$date ${duration(value)}"
+                                                        this.selected = active
+                                                    }
+                                                    .clickable { selectedDate = if (active) null else date.toString() },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text("$day", color = foreground, fontSize = 13.sp)
                                             }
                                         }
                                     }

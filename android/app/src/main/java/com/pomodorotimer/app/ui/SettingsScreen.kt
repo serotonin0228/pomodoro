@@ -61,6 +61,7 @@ fun SettingsScreen(
     keepScreenOn: Boolean,
     onKeepScreenOn: (Boolean) -> Unit,
     onCheckUpdates: () -> Unit,
+    onAbout: () -> Unit,
 ) {
     val settings = controller.state.settings
     val text = LocalUiText.current
@@ -269,10 +270,15 @@ fun SettingsScreen(
 
         item { SettingsHeading(text.sectionAppLimits) }
         item { FocusGuardCard(controller) }
-        if (!BuildConfig.DEBUG) {
-            item { SettingsHeading(text.sectionAbout) }
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+        item { SettingsHeading(text.sectionAbout) }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ArrowPreference(
+                    title = text.aboutApp,
+                    startAction = { PreferenceIcon(MiuixIcons.Info) },
+                    onClick = onAbout,
+                )
+                if (!BuildConfig.DEBUG) {
                     ArrowPreference(
                         title = text.checkForUpdates,
                         summary = "v${BuildConfig.VERSION_NAME}",
@@ -287,6 +293,6 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsHeading(title: String) {
+internal fun SettingsHeading(title: String) {
     Text(title, modifier = Modifier.padding(start = 6.dp, top = 12.dp, bottom = 2.dp), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colorScheme.onSurfaceVariantSummary)
 }

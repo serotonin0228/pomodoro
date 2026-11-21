@@ -3,6 +3,7 @@ package com.pomodorotimer.app.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -12,9 +13,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -26,10 +29,6 @@ import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Alarm
-import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.icon.extended.Weeks
 
 /**
  * Application shell in the KernelSU-Style-UI-Kit layout:
@@ -49,7 +48,9 @@ fun AppShell(
     val text = LocalUiText.current
     val context = LocalContext.current
     val stateHolder = rememberSaveableStateHolder()
-    val scrollBehavior = MiuixScrollBehavior()
+    val statsScroll = MiuixScrollBehavior()
+    val settingsScroll = MiuixScrollBehavior()
+    var showAbout by rememberSaveable(controller.account) { mutableStateOf(false) }
 
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -88,14 +89,20 @@ fun AppShell(
         }
     }
 
-    val title = when (controller.tab) {
-        WorkspaceTab.TIMER -> text.appName
-        WorkspaceTab.STATS -> text.stats
-        WorkspaceTab.SETTINGS -> text.settings
+    if (showAbout && controller.tab == WorkspaceTab.SETTINGS) {
+        BackHandler { showAbout = false }
+        AboutScreen(onBack = { showAbout = false })
+        return
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = title, scrollBehavior = scrollBehavior) },
+        topBar = {
+            when (controller.tab) {
+                WorkspaceTab.TIMER -> TopAppBar(title = text.appName, scrollBehavior = null)
+                WorkspaceTab.STATS -> TopAppBar(title = text.stats, scrollBehavior = statsScroll)
+                WorkspaceTab.SETTINGS -> TopAppBar(title = text.settings, scrollBehavior = settingsScroll)
+            }
+        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
@@ -128,9 +135,17 @@ fun AppShell(
         ) { tab ->
             stateHolder.SaveableStateProvider("${controller.account ?: "guest"}:${tab.name}") {
                 when (tab) {
-                    WorkspaceTab.TIMER -> TimerScreen(controller, now, scrollBehavior, padding)
-                    WorkspaceTab.STATS -> StatsScreen(controller, now / 60_000 * 60_000, scrollBehavior, padding)
-                    WorkspaceTab.SETTINGS -> SettingsScreen(controller, scrollBehavior, padding, keepScreenOn, onKeepScreenOn, onCheckUpdates)
+                    WorkspaceTab.TIMER -> TimerScreen(controller, now, padding)
+                    WorkspaceTab.STATS -> StatsScreen(controller, now / 60_000 * 60_000, statsScroll, padding)
+                    WorkspaceTab.SETTINGS -> SettingsScreen(
+                        controller = controller,
+                        scrollBehavior = settingsScroll,
+                        padding = padding,
+                        keepScreenOn = keepScreenOn,
+                        onKeepScreenOn = onKeepScreenOn,
+                        onCheckUpdates = onCheckUpdates,
+                        onAbout = { showAbout = true },
+                    )
                 }
             }
         }
