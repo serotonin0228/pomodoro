@@ -7,8 +7,8 @@
     <color name="widget_action_text">#D3E5FF</color>
     <color name="widget_action_ripple">#40ABD0FF</color>
     <color name="widget_quiet_surface">#2C2E35</color>
-    <color name="widget_glass_start">#C5293243</color>
-    <color name="widget_glass_end">#CF171F2E</color>
+    <color name="widget_glass_start">#D3293243</color>
+    <color name="widget_glass_end">#D0171F2E</color>
     <color name="widget_glass_edge">#56B9D5FF</color>
     <color name="widget_glass_highlight">#24BCD9FF</color>
     <color name="widget_glass_highlight_fade">#0BBCD9FF</color>
